@@ -24,6 +24,7 @@
       "preload.js",
       "lib/**/*",
       "app/**/*",
+      "build/icon.png",
       "package.json"
     ],
     "directories": {

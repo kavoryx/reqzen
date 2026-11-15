@@ -101,6 +101,7 @@ function createWindow() {
   const win = new BrowserWindow({
     width: 1280,
     height: 860,
+    icon: path.join(__dirname, 'build', 'icon.png'),
     title: 'Reqnara',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
