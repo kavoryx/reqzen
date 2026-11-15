@@ -52,6 +52,8 @@ Requests must use HTTPS and a host allowed by an enabled environment or service 
 
 Environments, variables, collections, preferences, and other workspace settings are stored on this computer. Access tokens entered for API requests stay in memory while the app is open. Token-type configuration and other locally saved settings may contain sensitive values and are stored in local files; avoid configuring secrets on shared computers and protect your operating-system account. Exported workspaces and collections may contain project information—review files before sharing them.
 
+See the [Privacy Policy](docs/PRIVACY.md) for details about local storage, API requests, GitHub scans, and optional model providers.
+
 ## Optional integrations
 
 - **Git:** install Git if you use repository-cloning workflows. Local-folder scanning does not need Git. GitHub API scanning needs an internet connection; private repositories require appropriate access.
