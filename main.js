@@ -1,5 +1,5 @@
 // Electron main process. It owns the file dialog, file reading, and the only network calls the app makes:
-// one checked request at a time, to hosts listed in the open snapshot (see lib/runPolicy.js).
+// one checked request at a time, to hosts listed in configured environments (see lib/runPolicy.js).
 const { app, BrowserWindow, dialog, ipcMain, Menu, session } = require('electron');
 
 // Keep the data folder that earlier versions used, so saved environments and the last snapshot survive the rename.
@@ -320,9 +320,6 @@ function safeParse(text) {
 
 // Sends one request. The page supplies the built request and the token; the main process checks everything first.
 ipcMain.handle('request:run', async (_event, run) => {
-  if (!openSnapshot) {
-    return { ok: false, problems: ['Open a snapshot before sending a request.'] };
-  }
   const operation = run && run.operation ? run.operation : null;
   const envForRun = currentView().environments.find((e) => e.name === (run && run.environmentName));
   const confirmRequired = envForRun ? confirmations.requiredFor(savedConfirmations(), envForRun, run && run.method) : true;
@@ -714,13 +711,13 @@ const confirmationRows = () => currentView().environments.map((e) => ({
   methods: confirmations.effective(savedConfirmations(), e),
 }));
 
-ipcMain.handle('confirmations:list', () => ({ environments: openSnapshot && confirmationsFile ? confirmationRows() : [] }));
+ipcMain.handle('confirmations:list', () => ({ environments: confirmationsFile ? confirmationRows() : [] }));
 
 ipcMain.handle('confirmations:save', (_event, input) => {
-  if (!confirmationsFile || !openSnapshot) return { ok: false, problems: ['Open a snapshot first.'] };
+  if (!confirmationsFile) return { ok: false, problems: ['The app is not ready yet.'] };
   const envId = input && typeof input.environmentId === 'string' ? input.environmentId : '';
   const env = currentView().environments.find((e) => e.environmentId === envId);
-  if (!env) return { ok: false, problems: ['That environment is not in the open snapshot.'] };
+  if (!env) return { ok: false, problems: ['That environment is not available.'] };
   const { problems, value } = confirmations.validate(input && input.methods);
   if (problems.length > 0) return { ok: false, problems };
   const map = savedConfirmations();
@@ -730,7 +727,6 @@ ipcMain.handle('confirmations:save', (_event, input) => {
 
 // Asked by the page before it shows the typed-name box. The main process checks again when the request is sent.
 ipcMain.handle('confirmations:required', (_event, input) => {
-  if (!openSnapshot) return { required: true };
   const env = currentView().environments.find((e) => e.name === (input && input.environmentName));
   return { required: env ? confirmations.requiredFor(savedConfirmations(), env, input && input.method) : true };
 });
@@ -1016,7 +1012,7 @@ ipcMain.handle('workspace:export', async (_event, input) => {
 });
 
 ipcMain.handle('workspace:import', async () => {
-  if (!libraryFile || !tokenSourcesFile || !openSnapshot) return { ok: false, problems: ['Open a snapshot first.'] };
+  if (!libraryFile || !tokenSourcesFile) return { ok: false, problems: ['The app is not ready yet.'] };
   const picked = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'JSON', extensions: ['json'] }] });
   if (picked.canceled || picked.filePaths.length === 0) return { ok: false, problems: ['Import cancelled.'], cancelled: true };
   let content;
@@ -1072,7 +1068,6 @@ function maskSecrets(text, secrets) {
 }
 
 async function runTokenCall(input) {
-  if (!openSnapshot) return { ok: false, stage: 'check', problems: ['Open a snapshot first.'] };
   const view = currentView();
   const env = view.environments.find((e) => e.environmentId === (input && input.environmentId));
   // Headers come either as a record (from an API the snapshot knows) or as "Name: value" lines (from a token address).

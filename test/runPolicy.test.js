@@ -29,10 +29,27 @@ test('a GET to an allowed host with a token and a matching name is allowed', () 
   assert.equal(r.production, false);
 });
 
+test('a custom request can use a manually configured environment without a catalog', () => {
+  const workspace = {
+    environments: [{ name: 'My API', enabled: true, production: false, baseUrl: 'https://api.example.test' }],
+    serviceOverrides: [],
+  };
+  const custom = run({
+    url: 'https://api.example.test/v1/items',
+    environmentName: 'My API',
+    confirmEnvironment: 'My API',
+    noAuth: true,
+    token: '',
+  });
+  assert.deepEqual(checkRun(workspace, custom).problems, []);
+  assert.ok(checkRun(workspace, { ...custom, url: 'https://other.example.test/v1/items' }).problems
+    .some((problem) => problem.includes('not an enabled environment')));
+});
+
 test('refuses http, user info, hosts outside the snapshot and bad URLs', () => {
   assert.ok(checkRun(snapshot, run({ url: 'http://dev.example.test/x' })).problems.includes('Only https addresses can be used.'));
   assert.ok(checkRun(snapshot, run({ url: 'https://u:p@dev.example.test/x' })).problems.some((p) => p.includes('user name')));
-  assert.ok(checkRun(snapshot, run({ url: 'https://evil.example.com/x' })).problems.some((p) => p.includes('not an environment')));
+  assert.ok(checkRun(snapshot, run({ url: 'https://evil.example.com/x' })).problems.some((p) => p.includes('not an enabled environment')));
   assert.ok(checkRun(snapshot, run({ url: 'not a url' })).problems.includes('The request address is not valid.'));
 });
 
