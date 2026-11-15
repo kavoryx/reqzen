@@ -47,7 +47,7 @@ Close the running app, then run:
 npm run dist:win
 ```
 
-The NSIS installer is written to `release\`. For version 0.2.1, the output is `release\API-Explorer-0.2.1-x64.exe`. Run the `.exe` to install the app.
+The NSIS installer is written to `release\`. For version 0.2.1, the output is `release\Reqnara-0.2.1-x64.exe`. Run the `.exe` to install the app.
 
 The installer is unsigned, and executable signing/resource editing is disabled during packaging. Windows SmartScreen may display a warning. Only run an installer you built yourself or obtained from a source you trust. The `release\` folder is generated output and is excluded from Git.
 

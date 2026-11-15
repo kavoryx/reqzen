@@ -48,9 +48,9 @@ Close the running app, then run:
 npm run dist:mac
 ```
 
-The `.dmg` is written to `release/`. The build targets the architecture of the Mac running it: Apple silicon produces arm64; Intel produces x64. To install, open the disk image and drag API Explorer to Applications.
+The `.dmg` is written to `release/`. The build targets the architecture of the Mac running it: Apple silicon produces arm64; Intel produces x64. To install, open the disk image and drag Reqnara to Applications.
 
-This package is unsigned and not notarized. On first launch, macOS may block the app. In Finder, Control-click API Explorer, choose **Open**, and confirm only if you trust the build.
+This package is unsigned and not notarized. On first launch, macOS may block the app. In Finder, Control-click Reqnara, choose **Open**, and confirm only if you trust the build.
 
 ## Create a signed and notarized disk image
 
