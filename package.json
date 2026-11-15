@@ -2,7 +2,7 @@
   "name": "api-explorer-desktop",
   "version": "0.2.1",
   "private": true,
-  "description": "API Explorer desktop app: browse approved APIs from a snapshot file, check and send requests.",
+  "description": "Reqnara desktop app: scan APIs, configure environments, and send reviewed requests.",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -15,15 +15,16 @@
     "electron": "^45.3.2",
     "electron-builder": "^25.1.0"
   },
-  "productName": "API-Explorer",
+  "productName": "Reqnara",
   "build": {
     "appId": "com.apiexplorer.desktop",
-    "productName": "API-Explorer",
+    "productName": "Reqnara",
     "files": [
       "main.js",
       "preload.js",
       "lib/**/*",
       "app/**/*",
+      "build/icon.png",
       "package.json"
     ],
     "directories": {
@@ -42,7 +43,7 @@
       "notarize": true
     },
     "dmg": {
-      "title": "API-Explorer ${version}"
+      "title": "Reqnara ${version}"
     },
     "artifactName": "${productName}-${version}-${arch}.${ext}"
   }

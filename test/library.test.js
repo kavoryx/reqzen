@@ -34,7 +34,7 @@ test('the app format round-trips a collection and carries no tokens or variables
 
 test('an import with the wrong format, version or no valid APIs is refused with a reason', () => {
   assert.match(lib.importApp('{nope').problems[0], /not valid JSON/);
-  assert.match(lib.importApp(JSON.stringify({ format: 'other' })).problems[0], /not an API Explorer collection/);
+  assert.match(lib.importApp(JSON.stringify({ format: 'other' })).problems[0], /not a Reqnara collection/);
   assert.match(lib.importApp(JSON.stringify({ format: 'api-explorer-collection', formatVersion: 9, items: [] })).problems[0], /version 9/);
   assert.match(lib.importApp(JSON.stringify({ format: 'api-explorer-collection', formatVersion: 1, items: [{}] })).problems[0], /no valid APIs/);
 });

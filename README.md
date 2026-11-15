@@ -1,6 +1,6 @@
-# API Explorer Desktop
+# Reqnara Desktop
 
-Turn API source code into a browsable, searchable catalog, then configure environments and send reviewed API requests from a native desktop app. API Explorer is a local-first developer tool for understanding and working with APIs without setting up a hosted service.
+Scan API source code into a browsable, searchable catalog, then configure environments and send reviewed API requests from a native desktop app. Reqnara is a local-first developer tool for understanding and working with APIs without setting up a hosted service.
 
 ## Download and install (no developer tools required)
 
@@ -10,16 +10,16 @@ After a release is published:
 
 ### Windows 10/11 (64-bit)
 
-1. Download the `API-Explorer-<version>-x64.exe` installer from the release.
+1. Download the `Reqnara-<version>-x64.exe` installer from the release.
 2. Open the installer and follow its prompts.
-3. Launch **API Explorer** from the Start menu.
+3. Launch **Reqnara** from the Start menu.
 
 The installer includes the app and its runtime. You do **not** need Node.js, npm, Git, Python, or a separate frontend to install or run the desktop app. The installer is unsigned, so Windows SmartScreen may warn you; continue only if you trust the downloaded release.
 
 ### macOS (Apple silicon or Intel)
 
 1. Download the disk image matching your Mac: `arm64` for Apple silicon, or `x64` for Intel.
-2. Open the `.dmg` and drag **API Explorer** to **Applications**.
+2. Open the `.dmg` and drag **Reqnara** to **Applications**.
 3. Open the app from Applications.
 
 The app and its runtime are bundled; you do **not** need Node.js, npm, Git, Python, or a separate frontend to install or run it. Unsigned builds may be blocked on first launch. In Finder, Control-click the app, choose **Open**, and confirm only if you trust the release.
@@ -40,7 +40,7 @@ Scanning is static rather than running the application. Dynamically assembled ro
 
 ## First launch: set up and use the app
 
-1. **Start where you like.** Open a compatible API Explorer snapshot, scan a local source or GitHub repository, or create a custom request. A catalog is optional. If scanning GitHub, provide a token only when required for repository access or rate limits.
+1. **Start where you like.** Open a compatible catalog snapshot, scan a local source or GitHub repository, or create a custom request. A catalog is optional. If scanning GitHub, provide a token only when required for repository access or rate limits.
 2. **Set up an environment when you are ready to send.** Add one under **Settings → Environments**, or use environments included with a snapshot. Give it a clear name and an HTTPS base address. Requests are limited to hosts in enabled environments; add a separate environment if a token endpoint uses another host.
 3. **Configure authentication.** Enter an access token for the current session, set up a token type, or use a custom request’s supported authorization options. A token type can use a catalog API or a manually configured HTTPS token request.
 4. **Select and review a request.** Browse catalog operations or create a custom request, choose an environment, and review the complete request before sending. Write operations or production environments may require additional confirmation.
@@ -95,7 +95,7 @@ npm test
 npm run dist:win
 ```
 
-The installer is written to `release\`; for version 0.2.1 the file is `API-Explorer-0.2.1-x64.exe`. The installer is unsigned, and executable signing/resource editing is disabled during packaging. Build Windows packages on Windows rather than relying on cross-platform packaging.
+The installer is written to `release\`; for version 0.2.1 the file is `Reqnara-0.2.1-x64.exe`. The installer is unsigned, and executable signing/resource editing is disabled during packaging. Build Windows packages on Windows rather than relying on cross-platform packaging.
 
 ### Build macOS disk images
 
@@ -113,12 +113,12 @@ For signed and notarized distribution, an Apple Developer ID Application certifi
 
 ## Product highlights
 
-API Explorer brings source discovery, API catalog browsing, environment setup, and controlled request execution together in one desktop workflow. It is designed for developers who need to understand an existing service, compare APIs across environments, prepare repeatable requests, or create useful API documentation from source-derived contracts.
+Reqnara brings source discovery, API catalog browsing, environment setup, and controlled request execution together in one desktop workflow. It is designed for developers who need to understand an existing service, compare APIs across environments, prepare repeatable requests, or create useful API documentation from source-derived contracts.
 
 - **From source to usable catalog:** discover endpoints without first deploying or running the application.
-- **A focused, local-first desktop workflow:** workspace data stays on the user's computer; there is no API Explorer account or hosted catalog service.
+- **A focused, local-first desktop workflow:** workspace data stays on the user's computer; there is no Reqnara account or hosted catalog service.
 - **Safety-conscious requests:** enabled HTTPS host allow-listing and explicit confirmation gates help users review potentially consequential calls.
-- **Flexible handoff:** export collections in Postman v2.1 format or share API Explorer workspace and catalog files.
+- **Flexible handoff:** export collections in Postman v2.1 format or share Reqnara workspace and catalog files.
 - **Useful without AI:** scanning, catalog browsing, and request execution do not require Ollama or Claude.
 
 For repository descriptions, release notes, or search tags, use accurate terms such as **API catalog**, **API explorer**, **API client**, **source code scanner**, **API documentation**, **Spring Boot**, **NestJS**, **Express**, **FastAPI**, **Flask**, **Postman collection**, and **Electron desktop app**. Avoid claims that the scanner supports every language/framework or that generated documentation replaces review.
@@ -131,7 +131,7 @@ For repository descriptions, release notes, or search tags, use accurate terms s
 
 ## License
 
-The original API Explorer code in this repository is licensed under the [MIT License](LICENSE). Third-party dependencies and bundled components remain subject to their own licenses.
+The code in this repository is licensed under the [MIT License](LICENSE). Third-party dependencies and bundled components remain subject to their own licenses.
 
 ## Public repository hygiene
 
