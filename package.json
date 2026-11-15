@@ -1,0 +1,49 @@
+{
+  "name": "api-explorer-desktop",
+  "version": "0.2.1",
+  "private": true,
+  "description": "API Explorer desktop app: browse approved APIs from a snapshot file, check and send requests.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist:mac": "electron-builder --mac -c.mac.identity=null -c.mac.notarize=false",
+    "dist:mac-signed": "electron-builder --mac",
+    "dist:win": "electron-builder --win nsis -c.win.signAndEditExecutable=false",
+    "test": "node --test test/*.test.js"
+  },
+  "devDependencies": {
+    "electron": "^45.3.2",
+    "electron-builder": "^25.1.0"
+  },
+  "productName": "API-Explorer",
+  "build": {
+    "appId": "com.apiexplorer.desktop",
+    "productName": "API-Explorer",
+    "files": [
+      "main.js",
+      "preload.js",
+      "lib/**/*",
+      "app/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg"
+      ],
+      "hardenedRuntime": true,
+      "icon": "build/icon.png",
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "notarize": true
+    },
+    "dmg": {
+      "title": "API-Explorer ${version}"
+    },
+    "artifactName": "${productName}-${version}-${arch}.${ext}"
+  }
+}

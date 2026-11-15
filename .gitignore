@@ -1,0 +1,14 @@
+node_modules/
+release/
+.DS_Store
+Thumbs.db
+test-output.txt
+*.log
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.mobileprovision
