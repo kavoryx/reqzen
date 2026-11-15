@@ -30,7 +30,8 @@ test('each folder with a manifest that holds endpoints is a project, named after
     'docs/readme.md': '# docs',
   });
   const r = findProjects(root);
-  assert.deepEqual(r.projects.map((p) => [p.path, p.name, p.manifest]), [['inventory', 'inventory', 'pom.xml'], ['sample', 'sample', 'package.json']]);
+  assert.deepEqual(r.projects.map((p) => [p.path, p.name, p.buildFile]), [['inventory', 'inventory', 'pom.xml'], ['sample', 'sample', 'package.json']]);
+  assert.ok(r.projects.every((p) => p.manifest.includes('Spring Boot')), 'the project picker displays the detected framework');
   assert.ok(r.projects.every((p) => p.operations === 1));
   assert.deepEqual(r.notes, []); // docs has no source files, so it is not a candidate at all
 });
