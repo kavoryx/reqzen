@@ -40,10 +40,10 @@ Scanning is static rather than running the application. Dynamically assembled ro
 
 ## First launch: set up and use the app
 
-1. **Open or create a catalog.** Open a compatible API Explorer snapshot, or use project discovery/scanning to build a catalog from a local source or GitHub repository. If scanning GitHub, provide a token only when required for repository access or rate limits. Review the scan report and detected APIs.
-2. **Set up an environment.** Review the environments included with the snapshot, or add one under **Manage environments**. Give it a clear name and an HTTPS base address. Enable only environments you intend to use. If a token endpoint has a different host, add that host as an enabled environment too.
-3. **Configure authentication.** Set up the token type for the API, or enter an access token for the current session. For token fetching, choose an API from the catalog or configure the token request and the field containing the returned token.
-4. **Select and review an API.** Choose the operation and environment, enter required parameters, headers, and body values, then review the complete request before sending. Write operations or production environments may require additional confirmation.
+1. **Start where you like.** Open a compatible API Explorer snapshot, scan a local source or GitHub repository, or create a custom request. A catalog is optional. If scanning GitHub, provide a token only when required for repository access or rate limits.
+2. **Set up an environment when you are ready to send.** Add one under **Settings → Environments**, or use environments included with a snapshot. Give it a clear name and an HTTPS base address. Requests are limited to hosts in enabled environments; add a separate environment if a token endpoint uses another host.
+3. **Configure authentication.** Enter an access token for the current session, set up a token type, or use a custom request’s supported authorization options. A token type can use a catalog API or a manually configured HTTPS token request.
+4. **Select and review a request.** Browse catalog operations or create a custom request, choose an environment, and review the complete request before sending. Write operations or production environments may require additional confirmation.
 5. **Save or share useful work.** Favourite APIs, organize them into collections, save a custom request, or export a collection/workspace when you need to reuse or share it.
 
 ### Request safety and local data

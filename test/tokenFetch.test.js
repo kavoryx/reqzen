@@ -27,6 +27,12 @@ test('a separately hosted token endpoint works after its host is added as an env
   assert.deepEqual(tokenFetch.checkTokenRun(workspace, run({ url: 'https://login.example.test/oauth/token' }), {}, auth), []);
 });
 
+test('a manually configured token endpoint does not need a catalog', () => {
+  const env = { environmentId: 'yours:auth', name: 'Authentication', enabled: true, baseUrl: 'https://login.example.test' };
+  const workspace = { environments: [env], serviceOverrides: [] };
+  assert.deepEqual(tokenFetch.checkTokenRun(workspace, run({ url: 'https://login.example.test/oauth/token' }), null, env), []);
+});
+
 test('only a content type header is allowed on the token call, and no authorization header', () => {
   assert.ok(tokenFetch.checkTokenRun(snapshot, run({ headers: { Authorization: 'Bearer x' } }), {}, env).some((p) => p.includes('Authorization')));
 });
