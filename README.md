@@ -127,6 +127,11 @@ For repository descriptions, release notes, or search tags, use accurate terms s
 
 - [Windows setup and build](docs/WINDOWS.md)
 - [macOS setup, build, and signing](docs/MACOS.md)
+- [Privacy Policy](docs/PRIVACY.md)
+
+## License
+
+The original API Explorer code in this repository is licensed under the [MIT License](LICENSE). Third-party dependencies and bundled components remain subject to their own licenses.
 
 ## Public repository hygiene
 
