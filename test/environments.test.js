@@ -13,13 +13,20 @@ test('accepts an https host and keeps only the origin', () => {
   assert.deepEqual(r.value, { name: 'Lab', baseUrl: 'https://lab.example.test', production: false, enabled: true });
 });
 
-test('refuses http, credentials, paths, queries and duplicate names', () => {
+test('accepts an http local development host', () => {
+  const r = env.validate({ name: ' Local ', baseUrl: 'http://localhost:3000/' }, taken);
+  assert.deepEqual(r.problems, []);
+  assert.equal(r.value.baseUrl, 'http://localhost:3000');
+});
+
+test('refuses unsupported protocols, credentials, paths, queries and duplicate names', () => {
   const r = env.validate({ name: 'development', baseUrl: 'http://u:p@host.example.com/x?y=1' }, taken);
   assert.ok(r.problems.includes('An environment with this name already exists.'));
-  assert.ok(r.problems.includes('The address must start with https://.'));
   assert.ok(r.problems.includes('The address must not contain a user name or password.'));
-  assert.ok(r.problems.includes('Enter only the host part, for example https://host.example.com.'));
+  assert.ok(r.problems.includes('Enter only the host part, for example https://host.example.com or http://localhost:3000.'));
   assert.ok(r.problems.includes('The address must not contain a query or fragment.'));
+  assert.ok(env.validate({ name: 'FTP', baseUrl: 'ftp://host.example.com' }, taken).problems
+    .includes('The address must use http:// or https://.'));
 });
 
 test('editing keeps the same name without a duplicate error', () => {

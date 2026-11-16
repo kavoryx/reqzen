@@ -47,14 +47,14 @@ Reqnara includes scanning support for Spring Boot (Java), NestJS and Express-sty
 
 1. **Choose a starting point.** Scan a local project, open a compatible catalog snapshot, scan a GitHub repository, or create a custom request. You do not need a catalog to create a request.
 2. **Explore the API.** Search the catalog and open an operation to inspect its method, path, parameters, and contract details.
-3. **Add an environment before sending.** Go to **Settings → Environments** and add a clear name and HTTPS base address, or use an environment from your snapshot. API requests are restricted to hosts in enabled environments; token requests can use any HTTPS host.
-4. **Set up authentication if needed.** Enter a session access token, configure a token type, or use the supported authorization options for a custom request. A token type can use a catalog API or a manually configured HTTPS token request.
+3. **Add an environment before sending.** Go to **Settings → Environments** and add a clear name and HTTP or HTTPS base address, or use an environment from your snapshot. HTTPS API requests are restricted to hosts in enabled environments; HTTP API and token requests can use any host.
+4. **Set up authentication if needed.** Enter a session access token, configure a token type, or use the supported authorization options for a custom request. A token type can use a catalog API or a manually configured HTTP or HTTPS token request.
 5. **Review, then send.** Choose the environment, check the complete request, and send it when you are ready. Write operations, production environments, or incomplete API contracts may require extra confirmation.
 6. **Keep what you’ll reuse.** Favourite APIs, create collections, save custom requests, or export a collection or workspace.
 
 ### Request safety and local data
 
-API requests must use HTTPS and a host allowed by an enabled environment or service override. Token requests also require HTTPS, but may use a different host; configure token endpoints only for services you trust, since configured authorization credentials may be sent to that host. The app checks requests before sending them and may require confirmation for write operations, production use, or incomplete API contracts. It does not send requests automatically.
+HTTPS API requests must use a host allowed by an enabled environment or service override. Token requests can use any host over HTTP or HTTPS, and HTTP API requests can use any host. HTTP traffic—including authorization credentials—is unencrypted and may be visible to others on the network. Use HTTP only on trusted development networks. The app checks requests before sending them and may require confirmation for write operations, production use, or incomplete API contracts. It does not send requests automatically.
 
 Environments, variables, collections, preferences, and other workspace settings are stored on this computer. Access tokens entered for API requests stay in memory while the app is open. Token-type configuration and other locally saved settings may contain sensitive values and are stored in local files; avoid configuring secrets on shared computers and protect your operating-system account. Exported workspaces and collections may contain project information—review files before sharing them.
 

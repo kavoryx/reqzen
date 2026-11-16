@@ -46,8 +46,10 @@ test('a custom request can use a manually configured environment without a catal
     .some((problem) => problem.includes('not an enabled environment')));
 });
 
-test('refuses http, user info, hosts outside the snapshot and bad URLs', () => {
-  assert.ok(checkRun(snapshot, run({ url: 'http://dev.example.test/x' })).problems.includes('Only https addresses can be used.'));
+test('allows http to any host but restricts https to enabled hosts', () => {
+  assert.deepEqual(checkRun(snapshot, run({ url: 'http://localhost:3000/x' })).problems, []);
+  assert.deepEqual(checkRun(snapshot, run({ url: 'http://other.example.test/x' })).problems, []);
+  assert.ok(checkRun(snapshot, run({ url: 'ftp://dev.example.test/x' })).problems.includes('Only http and https addresses can be used.'));
   assert.ok(checkRun(snapshot, run({ url: 'https://u:p@dev.example.test/x' })).problems.some((p) => p.includes('user name')));
   assert.ok(checkRun(snapshot, run({ url: 'https://evil.example.com/x' })).problems.some((p) => p.includes('not an enabled environment')));
   assert.ok(checkRun(snapshot, run({ url: 'not a url' })).problems.includes('The request address is not valid.'));

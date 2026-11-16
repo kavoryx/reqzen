@@ -11,14 +11,18 @@ test('a token setup needs an API, a valid field name and JSON or an empty body',
   assert.deepEqual(tokenFetch.validateTokenSource({ operationId: 'op', tokenField: '', body: '' }).value.tokenField, 'access_token');
   assert.equal(tokenFetch.validateTokenSource({ operationId: 'op', tokenField: 'data.access token' }).problems.length, 1);
   assert.equal(tokenFetch.validateTokenSource({ operationId: 'op', body: '{oops' }).problems[0], 'The request body is not valid JSON.');
+  assert.deepEqual(tokenFetch.validateTokenType({ mode: 'request', url: 'http://localhost:8080/token' }).problems, []);
+  assert.ok(tokenFetch.validateTokenType({ mode: 'request', url: 'ftp://localhost/token' }).problems
+    .includes('Only http and https addresses can be used.'));
 });
 
-test('the token call accepts an unlisted https host and still requires confirmation for a POST', () => {
+test('the token call accepts unlisted http and https hosts and still requires confirmation for a POST', () => {
   assert.deepEqual(tokenFetch.checkTokenRun(run(), {}, env), []);
   assert.deepEqual(tokenFetch.checkTokenRun(run({ url: 'https://csp.example.test/token' }), {}, env), []);
+  assert.deepEqual(tokenFetch.checkTokenRun(run({ url: 'http://localhost:8080/token' }), {}, env), []);
   assert.ok(tokenFetch.checkTokenRun(run({ url: 'https://csp.example.test/token' }), {}, null)
     .some((p) => p.includes('Choose an environment that is turned on')));
-  assert.ok(tokenFetch.checkTokenRun(run({ url: 'http://api.example.test/token' }), {}, env).includes('Only https addresses can be used.'));
+  assert.ok(tokenFetch.checkTokenRun(run({ url: 'ftp://api.example.test/token' }), {}, env).includes('Only http and https addresses can be used.'));
   assert.ok(tokenFetch.checkTokenRun(run({ confirmWrite: false }), {}, env).some((p) => p.includes('changes data')));
   assert.ok(tokenFetch.checkTokenRun(run(), { schemaComplete: false }, env).some((p) => p.includes('incomplete')));
 });
