@@ -25,7 +25,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
-      - run: npm run dist:win -- --publish never
+      - run: npm run dist:win
       - uses: actions/upload-artifact@v4
         with:
           name: windows-installer
@@ -46,7 +46,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
-      - run: npm run dist:mac -- --${{ matrix.arch }} --publish never
+      - run: npm run dist:mac -- --${{ matrix.arch }}
       - uses: actions/upload-artifact@v4
         with:
           name: macos-${{ matrix.arch }}-installer
