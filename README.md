@@ -1,50 +1,59 @@
-# Reqnara Desktop
+# Reqnara — API Explorer and Desktop API Client
 
-Scan API source code into a browsable, searchable catalog, then configure environments and send reviewed API requests from a native desktop app. Reqnara is a local-first developer tool for understanding and working with APIs without setting up a hosted service.
+Turn unfamiliar API source code into something you can explore and use. Reqnara scans supported Java, JavaScript/TypeScript, and Python API projects into a searchable catalog, then gives you a focused desktop workspace to inspect endpoints, prepare requests, and send them only after review.
 
-## Download and install (no developer tools required)
+Built for developers onboarding to an existing service, investigating API contracts, or keeping repeatable requests close to their project. Reqnara runs as a local-first desktop app: no Reqnara account or hosted catalog is required, and core scanning, browsing, and request workflows work without AI.
 
-**The public [GitHub Releases page](https://github.com/manasranjanmhnt/api-explorer/releases) does not have a published installer yet.** Once a version tag is pushed, the release workflow in this repository builds and attaches the Windows installer and macOS disk images. Check the Releases page for the first available version; do not download files from unofficial mirrors.
+## Install Reqnara
 
-After a release is published:
+You need only the installer for your operating system. The app and its runtime are included; **Node.js, npm, Git, Python, Java, and a separate frontend are not required to install or run Reqnara.**
 
-### Windows 10/11 (64-bit)
+1. Open the official [Reqnara GitHub Releases](https://github.com/manasranjanmhnt/api-explorer/releases) page.
+2. Choose the latest release and download the installer that matches your computer:
+   - **Windows 10/11, 64-bit:** `Reqnara-<version>-x64.exe` (for example, `Reqnara-0.2.1-x64.exe`).
+   - **Mac with Apple silicon:** the `.dmg` file containing `arm64` in its name.
+   - **Mac with an Intel processor:** the `.dmg` file containing `x64` in its name.
+3. Install and launch the app using the instructions for your operating system below.
 
-1. Download the `Reqnara-<version>-x64.exe` installer from the release.
-2. Open the installer and follow its prompts.
-3. Launch **Reqnara** from the Start menu.
+Download installers only from the official Releases page. If it does not list an installer for your operating system, wait for an official package rather than using an unofficial mirror.
 
-The installer includes the app and its runtime. You do **not** need Node.js, npm, Git, Python, or a separate frontend to install or run the desktop app. The installer is unsigned, so Windows SmartScreen may warn you; continue only if you trust the downloaded release.
+### Windows
 
-### macOS (Apple silicon or Intel)
+1. Run the downloaded `Reqnara-<version>-x64.exe` file.
+2. Follow the installer prompts.
+3. Start **Reqnara** from the Start menu.
 
-1. Download the disk image matching your Mac: `arm64` for Apple silicon, or `x64` for Intel.
-2. Open the `.dmg` and drag **Reqnara** to **Applications**.
-3. Open the app from Applications.
+The Windows installer is unsigned, so SmartScreen may show a warning. Proceed only if you downloaded the installer from the official Releases page and trust it.
 
-The app and its runtime are bundled; you do **not** need Node.js, npm, Git, Python, or a separate frontend to install or run it. Unsigned builds may be blocked on first launch. In Finder, Control-click the app, choose **Open**, and confirm only if you trust the release.
+### macOS
 
-If there is no release yet, the installers have not been published; see the source-build instructions below. The GitHub Actions release workflow is triggered by pushing a version tag such as `v0.2.1`. It runs the tests and creates Windows x64, macOS x64, and macOS arm64 packages. The macOS packages are unsigned and not notarized.
+1. Open the `.dmg` file for your Mac’s processor: `arm64` for Apple silicon or `x64` for Intel.
+2. Drag **Reqnara** into **Applications**.
+3. Open Reqnara from Applications.
 
-## What you can do
+The macOS packages are unsigned and not notarized, so macOS may block the first launch. If you trust the official download, Control-click the app in Finder, choose **Open**, and confirm.
 
-- **Discover APIs from code:** find projects in local folders or GitHub repositories, scan selected sources, and export the resulting API catalog as a snapshot.
-- **Scan common frameworks:** Spring Boot (Java), NestJS and Express-style routes (JavaScript/TypeScript), and FastAPI and Flask route decorators (Python). Custom annotation/decorator rules let you adapt the scanner to other supported source patterns.
-- **Search and inspect a catalog:** browse services and operations, review methods, paths, parameters, descriptions, and available contract details, and use optional model assistance to rank search results.
-- **Prepare and send requests:** fill path, query, header, and body values; manage environments, service addresses, tokens, token-fetch configurations, variables, and reusable payloads.
-- **Keep reusable work:** save custom requests, favourites, and API collections; import or export collections and workspaces; export collections in Postman v2.1 format.
-- **Generate API documentation:** create API descriptions and service overviews from contract facts using a local Ollama model or, if configured, the Claude API.
-- **Choose how the app looks:** use system, light, or dark appearance, select a colour palette, and adjust API-list display preferences.
+## What Reqnara helps you do
 
-Scanning is static rather than running the application. Dynamically assembled routes, framework-specific router mounting, and unsupported conventions may not be found; review the scan report and catalog before relying on them.
+- **Find APIs in source code.** Scan a local project or a GitHub repository without building or running that project.
+- **Explore a searchable API catalog.** Review services, operations, methods, paths, parameters, descriptions, and available contract details.
+- **Prepare requests with context.** Set up environments, tokens, variables, headers, query and path parameters, and request bodies.
+- **Review before sending.** Use HTTPS environments and inspect requests before they go out; the app does not send requests automatically.
+- **Reuse and share your work.** Save custom requests and collections, import or export workspaces, and export collections in Postman v2.1 format.
+- **Create API documentation.** Generate descriptions and service overviews from contract facts with optional local Ollama or Claude API assistance.
 
-## First launch: set up and use the app
+### Supported source patterns
 
-1. **Start where you like.** Open a compatible catalog snapshot, scan a local source or GitHub repository, or create a custom request. A catalog is optional. If scanning GitHub, provide a token only when required for repository access or rate limits.
-2. **Set up an environment when you are ready to send.** Add one under **Settings → Environments**, or use environments included with a snapshot. Give it a clear name and an HTTPS base address. Requests are limited to hosts in enabled environments; add a separate environment if a token endpoint uses another host.
-3. **Configure authentication.** Enter an access token for the current session, set up a token type, or use a custom request’s supported authorization options. A token type can use a catalog API or a manually configured HTTPS token request.
-4. **Select and review a request.** Browse catalog operations or create a custom request, choose an environment, and review the complete request before sending. Write operations or production environments may require additional confirmation.
-5. **Save or share useful work.** Favourite APIs, organize them into collections, save a custom request, or export a collection/workspace when you need to reuse or share it.
+Reqnara includes scanning support for Spring Boot (Java), NestJS and Express-style routes (JavaScript/TypeScript), and FastAPI and Flask route decorators (Python). Custom annotation and decorator rules can adapt scanning to other source patterns. Scanning is static: dynamically assembled routes, framework-specific router mounting, and unsupported conventions may not be detected. Review the scan report and catalog before relying on the results.
+
+## Your first session
+
+1. **Choose a starting point.** Scan a local project, open a compatible catalog snapshot, scan a GitHub repository, or create a custom request. You do not need a catalog to create a request.
+2. **Explore the API.** Search the catalog and open an operation to inspect its method, path, parameters, and contract details.
+3. **Add an environment before sending.** Go to **Settings → Environments** and add a clear name and HTTPS base address, or use an environment from your snapshot. Requests are restricted to hosts in enabled environments; add another environment if a token service uses a different host.
+4. **Set up authentication if needed.** Enter a session access token, configure a token type, or use the supported authorization options for a custom request. A token type can use a catalog API or a manually configured HTTPS token request.
+5. **Review, then send.** Choose the environment, check the complete request, and send it when you are ready. Write operations, production environments, or incomplete API contracts may require extra confirmation.
+6. **Keep what you’ll reuse.** Favourite APIs, create collections, save custom requests, or export a collection or workspace.
 
 ### Request safety and local data
 
@@ -111,17 +120,17 @@ The `.dmg` is written to `release/` and targets the Mac's architecture. To build
 
 For signed and notarized distribution, an Apple Developer ID Application certificate and app-specific password are required. See the [macOS build and signing guide](docs/MACOS.md); never commit signing credentials or store them in project files.
 
-## Product highlights
+## Why developers use Reqnara
 
-Reqnara brings source discovery, API catalog browsing, environment setup, and controlled request execution together in one desktop workflow. It is designed for developers who need to understand an existing service, compare APIs across environments, prepare repeatable requests, or create useful API documentation from source-derived contracts.
+When an API is unfamiliar, the work is scattered: find its routes in source, understand its contract, configure a client, and keep useful requests for later. Reqnara brings those steps into one desktop API explorer and API client.
 
-- **From source to usable catalog:** discover endpoints without first deploying or running the application.
-- **A focused, local-first desktop workflow:** workspace data stays on the user's computer; there is no Reqnara account or hosted catalog service.
-- **Safety-conscious requests:** enabled HTTPS host allow-listing and explicit confirmation gates help users review potentially consequential calls.
-- **Flexible handoff:** export collections in Postman v2.1 format or share Reqnara workspace and catalog files.
-- **Useful without AI:** scanning, catalog browsing, and request execution do not require Ollama or Claude.
+- **Go from source to endpoints faster.** Build a browsable catalog from supported source patterns without first deploying the service.
+- **Keep discovery and testing connected.** Inspect an operation, configure an environment, and prepare a request in the same app.
+- **Stay in control of requests.** HTTPS and enabled-environment host checks help constrain destinations, while review and confirmation steps keep sending intentional.
+- **Adopt it without a hosted setup.** Install the desktop app and start with a local project or catalog; core features do not depend on AI or a Reqnara account.
+- **Take your work with you.** Export Postman v2.1 collections or Reqnara workspaces to fit your existing workflow.
 
-For repository descriptions, release notes, or search tags, use accurate terms such as **API catalog**, **API explorer**, **API client**, **source code scanner**, **API documentation**, **Spring Boot**, **NestJS**, **Express**, **FastAPI**, **Flask**, **Postman collection**, and **Electron desktop app**. Avoid claims that the scanner supports every language/framework or that generated documentation replaces review.
+Reqnara is an API source code scanner, searchable API catalog, and desktop API client for developers working with Spring Boot, NestJS, Express-style routes, FastAPI, and Flask. Scan results and generated documentation are starting points for developer review, not a substitute for it.
 
 ## Platform guides
 
