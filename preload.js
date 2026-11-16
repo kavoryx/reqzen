@@ -6,6 +6,12 @@ contextBridge.exposeInMainWorld('desktop', {
   lastSnapshot: () => ipcRenderer.invoke('snapshot:last'),
   runRequest: (run) => ipcRenderer.invoke('request:run', run),
   modelStatus: () => ipcRenderer.invoke('model:status'),
+  listModels: () => ipcRenderer.invoke('model:list'),
+  onModelSettingsChanged: (callback) => {
+    const handler = () => callback();
+    ipcRenderer.on('model:settings-changed', handler);
+    return () => ipcRenderer.removeListener('model:settings-changed', handler);
+  },
   askAgents: (input) => ipcRenderer.invoke('agent:search', input),
   fillFromDescription: (input) => ipcRenderer.invoke('assist:plan', input),
   listEnvironments: () => ipcRenderer.invoke('env:list'),
