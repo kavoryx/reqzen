@@ -8,12 +8,9 @@ Built for developers onboarding to an existing service, investigating API contra
 
 You need only the installer for your operating system. The app and its runtime are included; **Node.js, npm, Git, Python, Java, and a separate frontend are not required to install or run Reqnara.**
 
-1. Open the official [Reqnara GitHub Releases](https://github.com/manasranjanmhnt/api-explorer/releases) page.
-2. Choose the latest release and download the installer that matches your computer:
-   - **Windows 10/11, 64-bit:** `Reqnara-<version>-x64.exe` (for example, `Reqnara-0.2.1-x64.exe`).
-   - **Mac with Apple silicon:** the `.dmg` file containing `arm64` in its name.
-   - **Mac with an Intel processor:** the `.dmg` file containing `x64` in its name.
-3. Install and launch the app using the instructions for your operating system below.
+Use the [Reqnara Download page](https://manasranjanmhnt.github.io/api-explorer/) to choose Windows or macOS and get the matching latest installer. Mac users can select Apple silicon (ARM64) or Intel (x64). The page labels each download and links directly to the official GitHub release asset.
+
+You can also use the [GitHub Releases](https://github.com/manasranjanmhnt/api-explorer/releases) page. New releases label the operating system and processor in each filename. Older releases use these suffixes: **Windows x64** ends in `-x64.exe`, **macOS Apple silicon (ARM64)** ends in `-arm64.dmg`, and **macOS Intel (x64)** ends in `-x64.dmg`. Install and launch the app using the instructions for your operating system below.
 
 Download installers only from the official Releases page. If it does not list an installer for your operating system, wait for an official package rather than using an unofficial mirror.
 
