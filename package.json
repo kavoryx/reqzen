@@ -2,13 +2,13 @@
   "name": "api-explorer-desktop",
   "version": "0.2.1",
   "private": true,
-  "description": "Reqnara desktop app: scan APIs, configure environments, and send reviewed requests.",
+  "description": "Reqnara is a local-first API explorer and desktop API client that scans Java, JavaScript/TypeScript, and Python projects into searchable catalogs, then helps you review and send API requests.",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "dist:mac": "electron-builder --mac -c.mac.identity=null -c.mac.notarize=false --publish never",
     "dist:mac-signed": "electron-builder --mac",
-    "dist:win": "electron-builder --win nsis -c.win.signAndEditExecutable=false --publish never",
+    "dist:win": "electron-builder --win --publish never",
     "test": "node --test test/*.test.js"
   },
   "devDependencies": {
@@ -29,6 +29,12 @@
     ],
     "directories": {
       "output": "release"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "signAndEditExecutable": false
     },
     "mac": {
       "category": "public.app-category.developer-tools",
