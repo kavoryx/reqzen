@@ -1184,7 +1184,7 @@ async function runTokenCall(input) {
   }
   const secrets = [bearer, ...basicSecrets(basic)];
   for (const secret of secrets) aiRedaction.registerSecret(secret, 1);
-  const problems = tokenFetch.checkTokenRun(view, run, input && input.operation, env);
+  const problems = tokenFetch.checkTokenRun(run, input && input.operation, env);
   if (problems.length > 0) return { ok: false, stage: 'check', problems };
   // The access token and Basic credential are added here, after the checks, so a request cannot set them by itself.
   const sent = run.auth === 'bearer' ? { ...run.headers, Authorization: `Bearer ${bearer}` }
