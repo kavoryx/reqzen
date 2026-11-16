@@ -7,6 +7,7 @@ app.setPath('userData', require('path').join(app.getPath('appData'), 'API Explor
 const fs = require('fs');
 const path = require('path');
 const { checkRun, scrubToken } = require('./lib/runPolicy');
+const aiRedaction = require('./lib/aiRedaction');
 const { send } = require('./lib/httpRun');
 const confirmations = require('./lib/confirmations');
 const githubScan = require('./lib/githubScan');
@@ -16,6 +17,7 @@ const localScan = require('./lib/localScan');
 const projectFinder = require('./lib/projectFinder');
 const catalogExport = require('./lib/catalogExport');
 const ollama = require('./lib/ollama');
+const openaiCompatible = require('./lib/openaiCompatible');
 const assist = require('./lib/assist');
 const docAgent = require('./lib/docAgent');
 const { runDocumentation, needsDescription: docJobNeeds } = require('./lib/docJob');
@@ -47,11 +49,15 @@ let scanRulesFile = null;
 let docsFile = null;
 let githubClonesDir = null;
 let docSettingsFile = null;
-let claudeKey = ''; // held in memory for this session only; never saved
+const providerApiKeys = { claude: '', openai: '' };
 const savedLibrary = () => (libraryFile ? library.load(libraryFile) : library.sanitizeStore({}));
 const savedPayloads = () => (payloadsFile ? payloads.load(payloadsFile) : {});
 // Shared variables such as orgId, kept on this computer.
-const savedVariables = () => (variablesFile ? variables.load(variablesFile) : []);
+const savedVariables = () => {
+  const saved = variablesFile ? variables.load(variablesFile) : [];
+  aiRedaction.registerSensitiveValues(saved);
+  return saved;
+};
 const knownEnvironmentIds = () => currentView().environments.map((e) => e.environmentId);
 const yourEnvironments = () => (envFile ? environments.load(envFile) : []);
 // Address overrides for built-in (snapshot) environments, keyed by environment id.
@@ -321,6 +327,8 @@ function safeParse(text) {
 
 // Sends one request. The page supplies the built request and the token; the main process checks everything first.
 ipcMain.handle('request:run', async (_event, run) => {
+  aiRedaction.registerSensitiveValues(run);
+  aiRedaction.registerSecret(run && run.token, 1);
   const operation = run && run.operation ? run.operation : null;
   const envForRun = currentView().environments.find((e) => e.name === (run && run.environmentName));
   const confirmRequired = envForRun ? confirmations.requiredFor(savedConfirmations(), envForRun, run && run.method) : true;
@@ -346,20 +354,48 @@ ipcMain.handle('request:run', async (_event, run) => {
   }
 });
 
-// Local model: status, search ranking, and filling a request from a description. Answers are checked before use.
-ipcMain.handle('model:status', async () => ollama.status());
-
-// Documentation agent. Settings: the model provider, the manual writing instructions, the after-scan instructions, and whether
-// a scan writes descriptions by itself. The Claude key is held in memory for this session only, never saved.
+// AI settings apply to search, request planning, and documentation. API keys are held only for this session.
 const savedDocSettings = () => {
   try {
     const data = JSON.parse(fs.readFileSync(docSettingsFile, 'utf8'));
-    return data && typeof data === 'object' ? data : {};
+    const settings = data && typeof data === 'object' ? data : {};
+    aiRedaction.registerSensitiveValues(settings);
+    return settings;
   } catch {
     return {};
   }
 };
-const docProvider = () => (savedDocSettings().provider === 'claude' ? 'claude' : 'local');
+const docProviderFor = (settings) => ['claude', 'openai'].includes(settings.provider) ? settings.provider : 'local';
+const docProvider = () => docProviderFor(savedDocSettings());
+const activeApiKey = () => providerApiKeys[docProvider()] || '';
+const openaiSettings = () => openaiCompatible.connection(savedDocSettings());
+const activeModel = () => {
+  const provider = docProvider();
+  if (provider === 'openai') return openaiSettings().model;
+  if (provider === 'claude') return claudeApi.DEFAULT_MODEL;
+  return ollama.model();
+};
+
+ipcMain.handle('model:status', async () => {
+  const provider = docProvider();
+  if (provider === 'openai') return openaiCompatible.status({ ...openaiSettings(), key: activeApiKey() });
+  if (provider === 'claude') {
+    return activeApiKey()
+      ? { available: true, model: activeModel() }
+      : { available: false, model: activeModel(), reason: 'Set an API key in AI settings to use Claude.' };
+  }
+  return ollama.status();
+});
+
+ipcMain.handle('model:list', async () => {
+  if (docProvider() !== 'openai') return { ok: false, problem: 'Choose an OpenAI-compatible provider to list its models.' };
+  try {
+    return { ok: true, models: await openaiCompatible.listModels({ ...openaiSettings(), key: activeApiKey() }) };
+  } catch (e) {
+    return { ok: false, problem: e instanceof Error ? e.message : 'The AI server could not list its models.' };
+  }
+});
+
 // kind 'manual' is the Documentation window's prompt; 'auto' is the prompt used after a scan.
 const docInstructions = (kind = 'manual') => docAgent.instructionsOrDefault(savedDocSettings()[kind === 'auto' ? 'afterScanInstructions' : 'instructions']);
 const generateAfterScanSaved = () => savedDocSettings().generateAfterScan !== false;
@@ -375,7 +411,19 @@ const usableOperation = (o) => ({
 });
 
 function docChat() {
-  if (docProvider() === 'claude') return { source: 'claude', chat: (s, u) => claudeApi.chatJson(s, u, { key: claudeKey }) };
+  const provider = docProvider();
+  if (provider === 'claude') {
+    const key = providerApiKeys.claude;
+    return { source: 'claude', chat: (s, u) => claudeApi.chatJson(s, u, { key }) };
+  }
+  if (provider === 'openai') {
+    const settings = openaiSettings();
+    const key = providerApiKeys.openai;
+    return {
+      source: 'openai',
+      chat: (s, u) => openaiCompatible.chatJson(s, u, { ...settings, key }, 180000),
+    };
+  }
   // A local model on a laptop can be slow, so it gets longer than the default before a call is counted as failed.
   return { source: 'local', chat: (s, u) => ollama.chatJson(s, u, 180000) };
 }
@@ -383,7 +431,11 @@ function docChat() {
 /** Whether a model is ready to write descriptions, with the reason when it is not. */
 async function modelReady() {
   if (docProvider() === 'claude') {
-    return claudeKey ? { ok: true } : { ok: false, reason: 'No Claude API key is set for this session. Enter one in Documentation, or set up the local model.' };
+    return activeApiKey() ? { ok: true } : { ok: false, reason: 'No API key is set for this session. Enter one in AI settings, or choose another provider.' };
+  }
+  if (docProvider() === 'openai') {
+    const status = await openaiCompatible.status({ ...openaiSettings(), key: activeApiKey() });
+    return status.available ? { ok: true } : { ok: false, reason: status.reason || 'The configured AI model is unavailable.' };
   }
   const st = await ollama.status();
   return st && st.available ? { ok: true } : { ok: false, reason: `The local model is not running${st && st.reason ? ` (${st.reason})` : ''}. Start it to write descriptions.` };
@@ -408,6 +460,7 @@ async function afterScanDocs(text, flag) {
   const docs = docAgent.load(docsFile);
   const ops = (snapshot.operations || []).filter((o) => docJobNeeds(o, docs)).map(usableOperation);
   if (ops.length === 0) return { status: 'done', total: 0, reason: 'Every API already has a description.' };
+  aiRedaction.registerSensitiveValues(ops);
   const { source, chat } = docChat();
   docJobStop = false;
   docJob = { state: 'running', total: ops.length, done: 0, fromModel: 0, factual: 0, reason: '' };
@@ -429,14 +482,26 @@ ipcMain.handle('docs:get', () => ({
   afterScanInstructions: docInstructions('auto'),
   defaultInstructions: docAgent.DEFAULT_INSTRUCTIONS,
   generateAfterScan: generateAfterScanSaved(),
-  hasKey: claudeKey !== '',
+  hasKey: activeApiKey() !== '',
+  baseUrl: openaiSettings().baseUrl,
+  model: openaiSettings().model,
 }));
 
 ipcMain.handle('docs:settings', (_event, input) => {
   if (!docSettingsFile) return { ok: false, problems: ['The app is not ready yet.'] };
   const current = savedDocSettings();
+  aiRedaction.registerSensitiveValues(input);
   const next = { ...current };
-  if (input && (input.provider === 'claude' || input.provider === 'local')) next.provider = input.provider;
+  if (input && ['claude', 'local', 'openai'].includes(input.provider)) next.provider = input.provider;
+  if (input && typeof input.baseUrl === 'string') next.baseUrl = input.baseUrl.trim().slice(0, 300);
+  if (input && typeof input.model === 'string') next.model = input.model.trim().slice(0, 160);
+  if (docProviderFor(next) === 'openai') {
+    try {
+      Object.assign(next, openaiCompatible.connection(next));
+    } catch (e) {
+      return { ok: false, problem: e instanceof Error ? e.message : 'The AI server settings are invalid.' };
+    }
+  }
   // Blank text means "use the default", so the saved value is removed.
   for (const key of ['instructions', 'afterScanInstructions']) {
     if (input && typeof input[key] === 'string') {
@@ -448,18 +513,27 @@ ipcMain.handle('docs:settings', (_event, input) => {
   if (input && typeof input.generateAfterScan === 'boolean') next.generateAfterScan = input.generateAfterScan;
   fs.mkdirSync(path.dirname(docSettingsFile), { recursive: true });
   fs.writeFileSync(docSettingsFile, JSON.stringify(next), { mode: 0o600 });
+  for (const window of BrowserWindow.getAllWindows()) window.webContents.send('model:settings-changed');
   return {
     ok: true,
     provider: docProvider(),
+    hasKey: activeApiKey() !== '',
     instructions: docInstructions('manual'),
     afterScanInstructions: docInstructions('auto'),
     generateAfterScan: generateAfterScanSaved(),
+    baseUrl: openaiSettings().baseUrl,
+    model: openaiSettings().model,
   };
 });
 
 ipcMain.handle('docs:key', (_event, input) => {
-  claudeKey = input && typeof input.key === 'string' ? input.key.trim().slice(0, 300) : '';
-  return { ok: true, hasKey: claudeKey !== '' };
+  const provider = input && (input.provider === 'claude' || input.provider === 'openai') ? input.provider : docProvider();
+  if (provider !== 'claude' && provider !== 'openai') {
+    return { ok: false, problem: 'The selected AI provider does not use an API key.' };
+  }
+  providerApiKeys[provider] = input && typeof input.key === 'string' ? input.key.trim().slice(0, 500) : '';
+  aiRedaction.registerSecret(providerApiKeys[provider], 1);
+  return { ok: true, hasKey: providerApiKeys[provider] !== '' };
 });
 
 // The background run's status, for the page to show progress.
@@ -476,12 +550,20 @@ ipcMain.handle('docs:generate', async (_event, input) => {
   const ops = Array.isArray(input && input.operations) ? input.operations.slice(0, DOC_BATCH) : [];
   const usable = ops.filter((o) => o && typeof o.revisionId === 'string' && o.definition).map(usableOperation);
   if (usable.length === 0) return { ok: false, problem: 'No APIs to describe.' };
+  aiRedaction.registerSensitiveValues(usable);
   const { source, chat } = docChat();
-  if (source === 'claude' && claudeKey === '') return { ok: false, problem: 'Enter a Claude API key in settings first.' };
+  if (source === 'claude' && activeApiKey() === '') return { ok: false, problem: 'Enter an API key in AI settings first.' };
   try {
     const { results, modelFailures } = await docAgent.runDocAgent({ operations: usable, chat, source, instructions: docInstructions('manual') });
     if (modelFailures === usable.length) {
-      return { ok: false, problem: source === 'claude' ? 'The Claude API did not answer. Check the key and the connection.' : 'The local model did not answer. Check that it is running.' };
+      return {
+        ok: false,
+        problem: source === 'claude'
+          ? 'The Claude API did not answer. Check the key and connection.'
+          : source === 'openai'
+            ? 'The configured AI model did not answer. Check the server address, model, and API key.'
+            : 'The local model did not answer. Check that it is running.',
+      };
     }
     const docs = docAgent.merge(docsFile, results);
     return { ok: true, docs, written: results.length, fromModel: results.filter((r) => r.source !== 'template').length };
@@ -495,8 +577,9 @@ ipcMain.handle('docs:overview', async (_event, input) => {
   const serviceName = input && typeof input.serviceName === 'string' ? input.serviceName.slice(0, 100) : '';
   const ops = Array.isArray(input && input.operations) ? input.operations.slice(0, 200) : [];
   if (serviceName === '' || ops.length === 0) return { ok: false, problem: 'No APIs for this service.' };
+  aiRedaction.registerSensitiveValues({ serviceName, operations: ops, instructions: docInstructions('manual') });
   const { source, chat } = docChat();
-  if (source === 'claude' && claudeKey === '') return { ok: false, problem: 'Enter a Claude API key in settings first.' };
+  if (source === 'claude' && activeApiKey() === '') return { ok: false, problem: 'Enter an API key in AI settings first.' };
   const result = await docAgent.runOverview({ serviceName, operations: ops.map((o) => ({ httpMethod: o.httpMethod, pathTemplate: o.pathTemplate, summary: o.summary })), chat, source, instructions: docInstructions('manual') });
   if (result.modelFailed) return { ok: false, problem: 'The model did not answer. Check that it is running or that the key is valid.' };
   const overviews = docAgent.saveOverview(docsFile, serviceName, result.overview, result.source);
@@ -504,6 +587,7 @@ ipcMain.handle('docs:overview', async (_event, input) => {
 });
 
 ipcMain.handle('assist:rank', async (_event, input) => {
+  aiRedaction.registerSensitiveValues(input);
   const candidates = Array.isArray(input && input.candidates) ? input.candidates : [];
   const offered = candidates.slice(0, assist.MAX_CANDIDATES).map((c) => String(c.id));
   if (offered.length === 0 || typeof input.query !== 'string' || input.query.trim() === '') {
@@ -511,15 +595,16 @@ ipcMain.handle('assist:rank', async (_event, input) => {
   }
   try {
     const prompt = assist.rankPrompt(input.query, candidates);
-    const text = await ollama.chatJson(prompt.system, prompt.user);
+    const text = await docChat().chat(prompt.system, prompt.user);
     return { ok: true, ids: assist.parseRank(text, offered) };
   } catch (e) {
-    return { ok: false, problem: e instanceof Error ? e.message : 'The local model failed.' };
+    return { ok: false, problem: e instanceof Error ? e.message : 'The AI model failed.' };
   }
 });
 
 // The search agents: Supervisor decides, Discovery ranks. The page sends the question and the offline candidates.
 ipcMain.handle('agent:search', async (_event, input) => {
+  aiRedaction.registerSensitiveValues(input);
   const candidates = Array.isArray(input && input.candidates) ? input.candidates : [];
   const question = input && typeof input.question === 'string' ? input.question : '';
   if (question.trim() === '') return { ok: false, problem: 'Type a question first.' };
@@ -527,7 +612,7 @@ ipcMain.handle('agent:search', async (_event, input) => {
     const result = await agents.runAgents({
       question,
       candidates,
-      chat: (system, user) => ollama.chatJson(system, user),
+      chat: docChat().chat,
     });
     return { ok: true, ...result };
   } catch (e) {
@@ -536,15 +621,16 @@ ipcMain.handle('agent:search', async (_event, input) => {
 });
 
 ipcMain.handle('assist:plan', async (_event, input) => {
+  aiRedaction.registerSensitiveValues(input);
   if (!input || typeof input.description !== 'string' || input.description.trim() === '' || !input.operation) {
     return { ok: false, problem: 'Describe the call first.' };
   }
   try {
     const prompt = assist.planPrompt(input.description, input.operation);
-    const text = await ollama.chatJson(prompt.system, prompt.user);
+    const text = await docChat().chat(prompt.system, prompt.user);
     return { ok: true, ...assist.parsePlan(text, input.operation, input.description) };
   } catch (e) {
-    return { ok: false, problem: e instanceof Error ? e.message : 'The local model failed.' };
+    return { ok: false, problem: e instanceof Error ? e.message : 'The AI model failed.' };
   }
 });
 
@@ -629,6 +715,7 @@ ipcMain.handle('variables:save', (_event, input) => {
   }
   const { problems, value } = variables.validate(input, list, selfId, knownEnvironmentIds());
   if (problems.length > 0) return { ok: false, problems };
+  aiRedaction.registerSensitiveValues(value);
   const next = selfId
     ? list.map((v) => (v.id === selfId ? { ...v, ...value } : v))
     : [...list, { id: variables.newId(), ...value }];
@@ -801,6 +888,8 @@ function rememberScan(sources, text) {
 // Reads a repository or folder for the scan rules. Modes: 'clone' (default: git, sparse, copy deleted after the scan),
 // 'api' (the GitHub API, the fallback), and 'folder' (a folder already on this computer). The result is cached until refresh.
 ipcMain.handle('github:scan', async (_event, input) => {
+  aiRedaction.registerSensitiveValues(input);
+  aiRedaction.registerSecret(input && input.token, 1);
   if (!githubCacheDir) return { ok: false, problems: ['The app is not ready yet.'] };
   const mode = input && ['clone', 'api', 'folder'].includes(input.mode) ? input.mode : 'clone';
   const keep = input && input.keepClone === true;
@@ -892,6 +981,8 @@ ipcMain.handle('projects:findLocal', (_event, input) => {
 
 // The same for a repository: only the parent folder is cloned (sparse), read, and then deleted. Paths are repository paths.
 ipcMain.handle('projects:findGitHub', async (_event, input) => {
+  aiRedaction.registerSensitiveValues(input);
+  aiRedaction.registerSecret(input && input.token, 1);
   const repo = githubScan.parseRepo(input && input.repo);
   const folder = githubScan.cleanPath(input && input.path ? input.path : '');
   if (!repo || folder === null) return { ok: false, problems: ['Check the repository and folder addresses.'] };
@@ -971,7 +1062,11 @@ ipcMain.handle('scanRules:save', (_event, input) => {
 });
 
 // Token types (User, Support, Service, ...): one list for the app, run against any environment. Plus the workspace file.
-const savedTokenTypes = () => (tokenSourcesFile ? tokenTypes.load(tokenSourcesFile) : []);
+const savedTokenTypes = () => {
+  const saved = tokenSourcesFile ? tokenTypes.load(tokenSourcesFile) : [];
+  aiRedaction.registerSensitiveValues(saved);
+  return saved;
+};
 const environmentNames = () => Object.fromEntries(currentView().environments.map((e) => [e.environmentId, e.name]));
 
 ipcMain.handle('tokenTypes:list', () => ({ types: savedTokenTypes() }));
@@ -987,6 +1082,7 @@ ipcMain.handle('tokenTypes:save', (_event, input) => {
   const { problems, value } = tokenTypes.validateType(input && input.config, types, id || null);
   if (problems.length > 0) return { ok: false, problems };
   const saved = { id: id || tokenTypes.newTypeId(), ...value };
+  aiRedaction.registerSensitiveValues(saved);
   const next = id ? types.map((t) => (t.id === id ? saved : t)) : [...types, saved];
   return { ok: true, types: tokenTypes.save(tokenSourcesFile, next) };
 });
@@ -1069,6 +1165,7 @@ function maskSecrets(text, secrets) {
 }
 
 async function runTokenCall(input) {
+  aiRedaction.registerSensitiveValues(input);
   const view = currentView();
   const env = view.environments.find((e) => e.environmentId === (input && input.environmentId));
   // Headers come either as a record (from an API the snapshot knows) or as "Name: value" lines (from a token address).
@@ -1086,6 +1183,7 @@ async function runTokenCall(input) {
     run.headers['Content-Type'] = input && input.contentType === 'form' ? 'application/x-www-form-urlencoded' : 'application/json';
   }
   const secrets = [bearer, ...basicSecrets(basic)];
+  for (const secret of secrets) aiRedaction.registerSecret(secret, 1);
   const problems = tokenFetch.checkTokenRun(view, run, input && input.operation, env);
   if (problems.length > 0) return { ok: false, stage: 'check', problems };
   // The access token and Basic credential are added here, after the checks, so a request cannot set them by itself.
@@ -1111,6 +1209,7 @@ async function runTokenCall(input) {
   }
   const got = tokenFetch.extractToken(res.body, input.tokenField);
   if (!got.ok) return { ok: false, stage: 'field', status: res.status, problems: [got.problem], responseExcerpt, requestSummary };
+  aiRedaction.registerSecret(got.token, 1);
   return {
     ok: true, status: res.status, token: got.token, tokenLength: got.token.length, production: env.production === true,
     responseExcerpt, requestSummary,
@@ -1170,6 +1269,9 @@ app.whenReady().then(() => {
   hiddenFile = path.join(app.getPath('userData'), 'environment-hidden.json');
   lastSnapshotFile = path.join(app.getPath('userData'), 'snapshot', 'last-snapshot.json');
   envCacheFile = path.join(app.getPath('userData'), 'snapshot', 'environments.json');
+  savedVariables();
+  savedTokenTypes();
+  savedDocSettings();
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: { ...details.responseHeaders, 'Content-Security-Policy': [CONTENT_POLICY] },

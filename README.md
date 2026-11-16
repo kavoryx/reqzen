@@ -40,7 +40,7 @@ The macOS packages are unsigned and not notarized, so macOS may block the first 
 - **Prepare requests with context.** Set up environments, tokens, variables, headers, query and path parameters, and request bodies.
 - **Review before sending.** Use HTTPS environments and inspect requests before they go out; the app does not send requests automatically.
 - **Reuse and share your work.** Save custom requests and collections, import or export workspaces, and export collections in Postman v2.1 format.
-- **Create API documentation.** Generate descriptions and service overviews from contract facts with optional local Ollama or Claude API assistance.
+- **Use the AI provider that fits your workflow.** Choose Ollama, Claude, or any OpenAI-compatible local or hosted service, including Groq, for AI-assisted search, request planning, and documentation.
 
 ### Supported source patterns
 
@@ -63,11 +63,21 @@ Environments, variables, collections, preferences, and other workspace settings 
 
 See the [Privacy Policy](docs/PRIVACY.md) for details about local storage, API requests, GitHub scans, and optional model providers.
 
+### AI credential privacy
+
+**Reqnara keeps known API access tokens and `Authorization` credentials out of AI prompts.** Before sending prompts to Ollama, Claude, Groq, or another configured OpenAI-compatible provider, it redacts known request credentials and common token or secret patterns. This applies to AI-assisted search, request planning, and documentation agents, whether the model is local or hosted.
+
+AI provider keys are separate: they are sent to the configured provider only for endpoint authentication, not included in the prompt, and are held in memory for the current session. AI prompts can still contain relevant API contract details, search questions, request descriptions, and your AI instructions. Redaction is a safeguard, not a way to make arbitrary text safe; do not paste secrets into descriptions or custom AI instructions. For hosted models, review what prompt information the selected provider receives and its policies.
+
 ## Optional integrations
 
 - **Git:** install Git if you use repository-cloning workflows. Local-folder scanning does not need Git. GitHub API scanning needs an internet connection; private repositories require appropriate access.
-- **Ollama:** install Ollama and download `qwen2.5:3b` if you want local model-assisted search and documentation generation. Basic catalog browsing, scanning, and requests do not need a model.
-- **Claude API:** optional; configure a Claude API key in the documentation settings to generate documentation with Claude instead of a local model. The key is held for the current app session and is not saved by the app.
+- **AI models:** AI is optional. Basic scanning, catalog browsing, and request building work without a model. In **Settings → AI model and provider**, choose:
+  - **Ollama** for local inference. Install Ollama and download a model such as `qwen2.5:3b`; the app uses that model by default. You can set `OLLAMA_CHAT_MODEL` to use another installed model.
+  - **OpenAI-compatible** for local model servers such as LM Studio, Ollama's OpenAI-compatible endpoint, llama.cpp, vLLM, or LocalAI, or for hosted services such as Groq. Enter the server's base URL and model ID, or use **Use Groq** to prefill Groq's endpoint. Use **Load available models** to discover model IDs, then select and save one. The server must support OpenAI-compatible `/models` and `/chat/completions` endpoints with JSON response mode. Remote servers require HTTPS.
+  - **Claude API** for Anthropic models. Enter an API key in settings.
+
+  Keys are kept in memory for the current app session and are not saved to disk; enter them again after restarting Reqnara. Reqnara redacts known API access tokens and authorization credentials from prompts before sending them to any model. When you select a hosted provider such as Groq or Claude, relevant API metadata, search questions, request descriptions, or writing instructions are sent to that provider. Review the [Privacy Policy](docs/PRIVACY.md) and your organization's AI-use rules before enabling a hosted model.
 
 ## For developers: run from source
 
