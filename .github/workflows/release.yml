@@ -76,6 +76,14 @@ jobs:
         env:
           RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
         run: node -e "if ('v' + require('./package.json').version !== process.env.RELEASE_TAG) { console.error('Release tag must match the package version.'); process.exit(1); }"
+      - name: Label installers by platform
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+        run: |
+          version="${RELEASE_TAG#v}"
+          mv "release-assets/windows/Reqnara-${version}-x64.exe" "release-assets/windows/Reqnara-Windows-${version}-x64.exe"
+          mv "release-assets/macos-arm64/Reqnara-${version}-arm64.dmg" "release-assets/macos-arm64/Reqnara-macOS-Apple-Silicon-${version}-arm64.dmg"
+          mv "release-assets/macos-x64/Reqnara-${version}-x64.dmg" "release-assets/macos-x64/Reqnara-macOS-Intel-${version}-x64.dmg"
       - name: Publish installers to GitHub Releases
         env:
           GH_TOKEN: ${{ github.token }}
