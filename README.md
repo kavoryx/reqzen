@@ -1,4 +1,4 @@
-![Reqzen logo](website/reqzen-mark.svg)
+<img src="website/reqzen-mark.svg" alt="Reqzen logo" width="56">
 
 # Reqzen — API Explorer and Desktop API Client
 
