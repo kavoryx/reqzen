@@ -1,8 +1,8 @@
 {
-  "name": "api-explorer-desktop",
+  "name": "reqzen-desktop",
   "version": "0.2.3",
   "private": true,
-  "description": "Reqnara is a local-first API explorer and desktop API client that scans Java, JavaScript/TypeScript, and Python projects into searchable catalogs, then helps you review and send API requests.",
+  "description": "Reqzen is a local-first API explorer and desktop API client that scans Java, JavaScript/TypeScript, and Python projects into searchable catalogs, then helps you review and send API requests.",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -15,10 +15,10 @@
     "electron": "^45.3.2",
     "electron-builder": "^25.1.0"
   },
-  "productName": "Reqnara",
+  "productName": "Reqzen",
   "build": {
     "appId": "com.apiexplorer.desktop",
-    "productName": "Reqnara",
+    "productName": "Reqzen",
     "files": [
       "main.js",
       "preload.js",
@@ -49,7 +49,7 @@
       "notarize": true
     },
     "dmg": {
-      "title": "Reqnara ${version}"
+      "title": "Reqzen ${version}"
     },
     "artifactName": "${productName}-${version}-${arch}.${ext}"
   }
