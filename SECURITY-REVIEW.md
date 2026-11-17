@@ -8,9 +8,9 @@
 
 The repository had no checked-in CodeQL, dependency-review, npm-audit, or secret-scanning workflows. The added workflows cover JavaScript/TypeScript and GitHub Actions static analysis, npm dependency auditing, and Gitleaks secret scanning.
 
-The npm audit found **16 vulnerable dependency entries** in the lockfile: 1 critical, 11 high, and 4 moderate. These are development and packaging dependencies in the Electron build toolchain. No application-source vulnerability was confirmed by this workflow-configuration review.
+The initial npm audit found **16 vulnerable dependency entries** in the lockfile: 1 critical, 11 high, and 4 moderate. These were development and packaging dependencies in the Electron build toolchain. No application-source vulnerability was confirmed by this workflow-configuration review.
 
-## Dependency findings
+## Initial dependency findings
 
 | Severity | Affected packages | Finding |
 |---|---|---|
@@ -18,7 +18,9 @@ The npm audit found **16 vulnerable dependency entries** in the lockfile: 1 crit
 | High | `@electron/rebuild`, `app-builder-lib`, `builder-util`, `builder-util-runtime`, `cacache`, `dmg-builder`, `electron-builder`, `electron-builder-squirrel-windows`, `electron-publish`, `make-fetch-happen`, and `node-gyp` | The build-tool dependency tree includes an AppImage search-path issue in `app-builder-lib` ([GHSA-7g7r-gx96-252g](https://github.com/advisories/GHSA-7g7r-gx96-252g)) and a cross-origin redirect credential leak in `builder-util-runtime` versions below `9.7.0` ([GHSA-p2f4-r6v6-j797](https://github.com/advisories/GHSA-p2f4-r6v6-j797)). The audit reports 11 high-severity vulnerable entries across the tree. |
 | Moderate | `@electron/universal`, `config-file-ts`, `glob`, and `minimatch` | `glob` is affected by an AbortSignal cancellation bypass that can allow post-timeout filesystem traversal ([GHSA-3g3m-2fjr-6pw4](https://github.com/advisories/GHSA-3g3m-2fjr-6pw4)); `minimatch` has a potential denial of service via globparts amplification ([GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249)). The audit reports four moderate vulnerable entries across the tree. |
 
-The audit reports that remediation is available by upgrading `electron-builder` to `26.18.0`, which is a major-version change from the currently declared `^25.1.0`. No dependency versions were changed as part of this review.
+## Remediation status
+
+PR #20 upgrades `electron-builder` from `^25.1.0` to `^26.18.0`. The current high-severity audit gate passes: no critical or high findings remain. A full npm audit still reports six moderate findings, all through `minimatch` in the Electron packaging dependency tree.
 
 ## Pipeline coverage
 
@@ -32,4 +34,5 @@ GitHub Dependency Review is not enabled because this repository's dependency gra
 
 - `npm test`: 174 tests passed.
 - Workflow YAML files parsed successfully.
-- `npm audit --package-lock-only --audit-level=high`: failed as intended on the findings above.
+- Windows installer build with `electron-builder@26.18.0`: passed.
+- `npm audit --package-lock-only --audit-level=high`: passed; six moderate findings remain outside the configured failure threshold.
