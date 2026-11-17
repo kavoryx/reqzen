@@ -1,0 +1,27 @@
+name: PR checks
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-coverage:
+    name: Test coverage
+    runs-on: ubuntu-latest
+    env:
+      TEST_COVERAGE_THRESHOLD: ${{ vars.TEST_COVERAGE_THRESHOLD || '90' }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.12.0
+      - name: Run tests and enforce line coverage
+        run: node --test --experimental-test-coverage --test-coverage-lines="${TEST_COVERAGE_THRESHOLD}" test/*.test.js
