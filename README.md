@@ -105,7 +105,7 @@ Run npm commands from the repository root (the directory containing `package.jso
 
 ### Automated security checks
 
-GitHub Actions runs CodeQL analysis for JavaScript/TypeScript and workflow code, reviews dependencies added by pull requests, and audits the npm lockfile for high- and critical-severity advisories. Gitleaks scans the repository history for exposed credentials. The PR checks also run the test suite with a minimum line-coverage threshold of 90%. Set the `TEST_COVERAGE_THRESHOLD` Actions repository variable to change that percentage. These checks run on pull requests to `main` and on a weekly schedule; CodeQL, dependency audits, and test coverage also run on pushes to `main`.
+GitHub Actions runs CodeQL analysis for JavaScript/TypeScript and workflow code, audits the npm lockfile for high- and critical-severity advisories, and scans repository history for exposed credentials with Gitleaks. The PR checks also run the test suite with a minimum line-coverage threshold of 90%. Set the `TEST_COVERAGE_THRESHOLD` Actions repository variable to change that percentage. These checks run on pull requests to `main` and on a weekly schedule; CodeQL, dependency audits, and test coverage also run on pushes to `main`.
 
 ### Build a Windows installer
 

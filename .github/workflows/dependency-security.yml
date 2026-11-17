@@ -25,15 +25,3 @@ jobs:
           node-version: 22.12.0
       - name: Audit the lockfile
         run: npm audit --package-lock-only --audit-level=high
-
-  dependency-review:
-    name: Review pull request dependencies
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - name: Check dependencies introduced by this pull request
-        uses: actions/dependency-review-action@v5
-        with:
-          fail-on-severity: high

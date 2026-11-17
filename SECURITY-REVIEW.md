@@ -6,9 +6,9 @@
 
 ## Summary
 
-The repository had no checked-in CodeQL, dependency-review, npm-audit, or secret-scanning workflows. The added workflows cover JavaScript/TypeScript and GitHub Actions static analysis, dependency review and auditing, and Gitleaks secret scanning.
+The repository had no checked-in CodeQL, dependency-review, npm-audit, or secret-scanning workflows. The added workflows cover JavaScript/TypeScript and GitHub Actions static analysis, npm dependency auditing, and Gitleaks secret scanning.
 
-The npm audit found **16 vulnerable dependency entries** in the lockfile: 1 critical, 11 high, and 4 moderate. These are development and packaging dependencies in the Electron build toolchain. No application-source vulnerability was confirmed by this configuration and dependency review.
+The npm audit found **16 vulnerable dependency entries** in the lockfile: 1 critical, 11 high, and 4 moderate. These are development and packaging dependencies in the Electron build toolchain. No application-source vulnerability was confirmed by this workflow-configuration review.
 
 ## Dependency findings
 
@@ -23,8 +23,10 @@ The audit reports that remediation is available by upgrading `electron-builder` 
 ## Pipeline coverage
 
 - **CodeQL:** JavaScript/TypeScript and GitHub Actions workflow analysis on pull requests to `main`, pushes to `main`, and a weekly schedule.
-- **Dependency security:** npm lockfile audit on pull requests, pushes to `main`, and weekly; pull-request dependency review fails for high- or critical-severity additions.
+- **Dependency security:** npm lockfile audit on pull requests, pushes to `main`, and weekly. The audit fails on high- and critical-severity findings.
 - **Secret scanning:** Gitleaks scans repository history on pull requests, pushes, and a weekly schedule.
+
+GitHub Dependency Review is not enabled because this repository's dependency graph is disabled. The npm audit workflow provides dependency vulnerability checks without that repository setting.
 
 ## Validation
 
