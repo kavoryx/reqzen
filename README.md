@@ -103,6 +103,10 @@ npm start
 
 Run npm commands from the repository root (the directory containing `package.json`). `npm ci` installs the locked development dependencies; `npm test` runs the automated test suite; `npm start` launches the app from source.
 
+### Automated security checks
+
+GitHub Actions runs CodeQL analysis for JavaScript/TypeScript and workflow code, reviews dependencies added by pull requests, and audits the npm lockfile for high- and critical-severity advisories. Gitleaks scans the repository history for exposed credentials. The PR checks also run the test suite with a minimum line-coverage threshold of 90%. Set the `TEST_COVERAGE_THRESHOLD` Actions repository variable to change that percentage. These checks run on pull requests to `main` and on a weekly schedule; CodeQL, dependency audits, and test coverage also run on pushes to `main`.
+
 ### Build a Windows installer
 
 Build on Windows, from PowerShell in the repository root:
