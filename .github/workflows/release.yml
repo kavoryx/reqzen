@@ -81,9 +81,9 @@ jobs:
           RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
         run: |
           version="${RELEASE_TAG#v}"
-          mv "release-assets/windows/Reqnara-${version}-x64.exe" "release-assets/windows/Reqnara-Windows-${version}-x64.exe"
-          mv "release-assets/macos-arm64/Reqnara-${version}-arm64.dmg" "release-assets/macos-arm64/Reqnara-macOS-Apple-Silicon-${version}-arm64.dmg"
-          mv "release-assets/macos-x64/Reqnara-${version}-x64.dmg" "release-assets/macos-x64/Reqnara-macOS-Intel-${version}-x64.dmg"
+          mv "release-assets/windows/Reqzen-${version}-x64.exe" "release-assets/windows/Reqzen-Windows-${version}-x64.exe"
+          mv "release-assets/macos-arm64/Reqzen-${version}-arm64.dmg" "release-assets/macos-arm64/Reqzen-macOS-Apple-Silicon-${version}-arm64.dmg"
+          mv "release-assets/macos-x64/Reqzen-${version}-x64.dmg" "release-assets/macos-x64/Reqzen-macOS-Intel-${version}-x64.dmg"
       - name: Publish installers to GitHub Releases
         env:
           GH_TOKEN: ${{ github.token }}

@@ -21,8 +21,8 @@ The Git check is optional. If Node.js was installed while PowerShell was open, c
 Clone the public repository and enter its folder:
 
 ```powershell
-git clone https://github.com/manasranjanmhnt/api-explorer.git
-Set-Location .\api-explorer
+git clone https://github.com/manasranjanmhnt/reqzen.git
+Set-Location .\reqzen
 ```
 
 For an existing checkout, use `Set-Location` with that repository's path instead. All following commands must run in the directory containing `package.json`.
@@ -47,7 +47,7 @@ Close the running app, then run:
 npm run dist:win
 ```
 
-The NSIS installer is written to `release\`. For version 0.2.1, the output is `release\Reqnara-0.2.1-x64.exe`. Run the `.exe` to install the app.
+The NSIS installer is written to `release\` as `Reqzen-<version>-x64.exe`. Run the `.exe` to install the app.
 
 The installer is unsigned, and executable signing/resource editing is disabled during packaging. Windows SmartScreen may display a warning. Only run an installer you built yourself or obtained from a source you trust. The `release\` folder is generated output and is excluded from Git.
 

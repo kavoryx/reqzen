@@ -108,7 +108,7 @@ function createWindow() {
     width: 1280,
     height: 860,
     icon: path.join(__dirname, 'build', 'icon.png'),
-    title: 'Reqnara',
+    title: 'Reqzen',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -1021,7 +1021,7 @@ ipcMain.handle('catalog:export', async (event, input) => {
       overviews,
       defaultEnvironmentId: input && typeof input.defaultEnvironmentId === 'string' ? input.defaultEnvironmentId : '',
       includeGenerated: !(input && input.includeGenerated === false),
-      exportedBy: 'Reqnara',
+      exportedBy: 'Reqzen',
       // Services, environments and token types are chosen in the export dialog. Token types never carry values.
       services: input && Array.isArray(input.services) ? input.services.filter((x) => typeof x === 'string') : null,
       includeEnvironments: !(input && input.includeEnvironments === false),
@@ -1100,7 +1100,7 @@ ipcMain.handle('workspace:export', async (_event, input) => {
   const rows = tokenTypes.exportRows(savedTokenTypes(), environmentNames(), includeValues ? values : null);
   const content = tokenTypes.exportWorkspace(savedLibrary(), rows, includeValues);
   const picked = await dialog.showSaveDialog({
-    defaultPath: library.fileNameFor('Reqnara workspace', '.workspace.json'),
+    defaultPath: library.fileNameFor('Reqzen workspace', '.workspace.json'),
     filters: [{ name: 'JSON', extensions: ['json'] }],
   });
   if (picked.canceled || !picked.filePath) return { ok: false, problems: ['Export cancelled.'], cancelled: true };

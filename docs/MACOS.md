@@ -22,8 +22,8 @@ The Git check is optional. If Node.js was installed while Terminal was open, clo
 Clone the public repository and enter its folder:
 
 ```sh
-git clone https://github.com/manasranjanmhnt/api-explorer.git
-cd api-explorer
+git clone https://github.com/manasranjanmhnt/reqzen.git
+cd reqzen
 ```
 
 For an existing checkout, use `cd` with that repository's path instead. All following commands must run in the directory containing `package.json`.
@@ -48,9 +48,9 @@ Close the running app, then run:
 npm run dist:mac
 ```
 
-The `.dmg` is written to `release/`. The build targets the architecture of the Mac running it: Apple silicon produces arm64; Intel produces x64. To install, open the disk image and drag Reqnara to Applications.
+The `.dmg` is written to `release/`. The build targets the architecture of the Mac running it: Apple silicon produces arm64; Intel produces x64. To install, open the disk image and drag Reqzen to Applications.
 
-This package is unsigned and not notarized. On first launch, macOS may block the app. In Finder, Control-click Reqnara, choose **Open**, and confirm only if you trust the build.
+This package is unsigned and not notarized. On first launch, macOS may block the app. In Finder, Control-click Reqzen, choose **Open**, and confirm only if you trust the build.
 
 ## Create a signed and notarized disk image
 

@@ -78,7 +78,7 @@ test('a workspace import skips type names already used here', () => {
 });
 
 test('a workspace file of the wrong kind or version is refused', () => {
-  assert.match(tt.parseWorkspace('{}').problems[0], /not a Reqnara workspace/);
+  assert.match(tt.parseWorkspace('{}').problems[0], /not a Reqzen workspace/);
   assert.match(tt.parseWorkspace(JSON.stringify({ format: 'api-explorer-workspace', formatVersion: 3 })).problems[0], /version 3/);
 });
 
