@@ -1,10 +1,10 @@
 <img src="website/reqzen-mark.svg" alt="Reqzen logo" width="56">
 
-# Reqzen — API Explorer and Desktop API Client
+# Reqzen — AI API Explorer, Desktop API Client & Postman Alternative
 
-Turn unfamiliar API source code into something you can explore and use. Reqzen scans supported Java, JavaScript/TypeScript, and Python API projects into a searchable catalog, then gives you a focused desktop workspace to inspect endpoints, prepare requests, and send them only after review.
+Reqzen is a local-first, AI-assisted API explorer and REST API client for developers looking for a Postman alternative. Scan supported Java, JavaScript/TypeScript, and Python API projects—or OpenAPI 3 definitions in GitHub repositories—into a searchable API catalog, then inspect endpoints, prepare requests, and send them only after review.
 
-Built for developers onboarding to an existing service, investigating API contracts, or keeping repeatable requests close to their project. Reqzen runs as a local-first desktop app: no Reqzen account or hosted catalog is required, and core scanning, browsing, and request workflows work without AI.
+Built for developers onboarding to an existing service, investigating API contracts, or keeping repeatable API requests close to their project. Reqzen runs as a desktop app: no Reqzen account or hosted catalog is required, and core scanning, browsing, and API testing workflows work without AI.
 
 ## Install Reqzen
 
@@ -30,20 +30,28 @@ The Windows installer is unsigned, so SmartScreen may show a warning. Proceed on
 2. Drag **Reqzen** into **Applications**.
 3. Open Reqzen from Applications.
 
-The macOS packages are unsigned and not notarized, so macOS may block the first launch. If you trust the official download, Control-click the app in Finder, choose **Open**, and confirm.
+The macOS packages are unsigned and not notarized, so macOS may block the first launch. Only proceed if you downloaded Reqzen from the official Releases page and trust the download. In Finder, Control-click Reqzen, choose **Open**, and confirm. If macOS still blocks it, go to **System Settings → Privacy & Security**, scroll to the Security section, and choose **Open Anyway** for Reqzen.
 
 ## What Reqzen helps you do
 
 - **Find APIs in source code.** Scan a local project or a GitHub repository without building or running that project.
+- **Build catalogs from OpenAPI 3.** Read OpenAPI 3 definitions from GitHub repositories alongside supported source-code routes; Swagger 2 conversion is not supported yet.
 - **Explore a searchable API catalog.** Review services, operations, methods, paths, parameters, descriptions, and available contract details.
 - **Prepare requests with context.** Set up environments, tokens, variables, headers, query and path parameters, and request bodies.
 - **Review before sending.** Use HTTPS environments and inspect requests before they go out; the app does not send requests automatically.
 - **Reuse and share your work.** Save custom requests and collections, import or export workspaces, and export collections in Postman v2.1 format.
-- **Use the AI provider that fits your workflow.** Choose Ollama, Claude, or any OpenAI-compatible local or hosted service, including Groq, for AI-assisted search, request planning, and documentation.
+- **Use AI where it helps.** Ask questions in natural language to find and rank API operations, plan request inputs from a description, and draft API and service documentation. Choose Ollama, Claude, or an OpenAI-compatible local or hosted provider such as Groq; plain search remains available if AI is off or unavailable.
 
 ### Supported source patterns
 
-Reqzen includes scanning support for Spring Boot (Java), NestJS and Express-style routes (JavaScript/TypeScript), and FastAPI and Flask route decorators (Python). Custom annotation and decorator rules can adapt scanning to other source patterns. Scanning is static: dynamically assembled routes, framework-specific router mounting, and unsupported conventions may not be detected. Review the scan report and catalog before relying on the results.
+Reqzen includes scanning support for Spring Boot (Java), NestJS and Express-style routes (JavaScript/TypeScript), and FastAPI and Flask route decorators (Python). GitHub scans can also read OpenAPI 3 definitions. Custom annotation and decorator rules can adapt source scanning to other patterns. Scanning is static: dynamically assembled routes, framework-specific router mounting, and unsupported conventions may not be detected. Swagger 2 definitions are not converted. Review the scan report and catalog before relying on the results.
+
+### AI-assisted API workflows
+
+- **AI API search:** Ask a question in natural language. Reqzen searches locally first, then optional AI agents help interpret the question and rank matching operations. If a model is unavailable, the regular search results remain usable.
+- **Request planning:** Describe the API call you want to make and get suggested values for declared path, query, and header parameters, plus a request body when applicable. Review and edit the request before sending it; planning does not send API calls.
+- **API documentation:** Generate draft descriptions for operations and overviews for services from contract details. Generated text is marked by its source, and factual fallback text is available when a model cannot provide a usable draft.
+- **Provider choice and credential safeguards:** Use Ollama locally, Claude, or an OpenAI-compatible local or hosted service. Known API credentials are redacted from prompts, but review the privacy policy and avoid putting secrets in descriptions or AI instructions.
 
 ## Your first session
 
@@ -144,6 +152,8 @@ When an API is unfamiliar, the work is scattered: find its routes in source, und
 - **Take your work with you.** Export Postman v2.1 collections or Reqzen workspaces to fit your existing workflow.
 
 Reqzen is an API source code scanner, searchable API catalog, and desktop API client for developers working with Spring Boot, NestJS, Express-style routes, FastAPI, and Flask. Scan results and generated documentation are starting points for developer review, not a substitute for it.
+
+**Search terms:** AI API explorer, Postman alternative, REST API client, API testing tool, API development, OpenAPI 3, API source code scanner, local-first developer tool, Ollama, Claude, Groq, Spring Boot, NestJS, Express, FastAPI, Flask.
 
 ## Platform guides
 
