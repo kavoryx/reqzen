@@ -1,6 +1,4 @@
-<img src="website/reqzen-mark.svg" alt="Reqzen logo" width="56">
-
-# Reqzen — AI API Explorer, Desktop API Client & Postman Alternative
+# <img src="website/reqzen-mark.svg" alt="Reqzen logo" width="56" align="middle"> Reqzen — AI API Explorer, Desktop API Client & Postman Alternative
 
 Reqzen is a local-first, AI-assisted API explorer and REST API client for developers looking for a Postman alternative. Scan supported Java, JavaScript/TypeScript, and Python API projects—or OpenAPI 3 definitions in GitHub repositories—into a searchable API catalog, then inspect endpoints, prepare requests, and send them only after review.
 
@@ -10,7 +8,7 @@ Built for developers onboarding to an existing service, investigating API contra
 
 You need only the installer for your operating system. The app and its runtime are included; **Node.js, npm, Git, Python, Java, and a separate frontend are not required to install or run Reqzen.**
 
-Use the [Reqzen Download page](https://manasranjanmhnt.github.io/reqzen/) to choose Windows or macOS and get the matching latest installer. Mac users can select Apple silicon (ARM64) or Intel (x64). The page labels each download and links directly to the official GitHub release asset.
+Use the [Reqzen project page](https://github.com/manasranjanmhnt/reqzen) to choose Windows or macOS and get the matching latest installer from the official GitHub Releases page. Mac users can select Apple silicon (ARM64) or Intel (x64).
 
 You can also use the [GitHub Releases](https://github.com/manasranjanmhnt/reqzen/releases) page. New releases label the operating system and processor in each filename. Older releases use these suffixes: **Windows x64** ends in `-x64.exe`, **macOS Apple silicon (ARM64)** ends in `-arm64.dmg`, and **macOS Intel (x64)** ends in `-x64.dmg`. Install and launch the app using the instructions for your operating system below.
 
