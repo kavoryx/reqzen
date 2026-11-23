@@ -36,3 +36,23 @@ GitHub Dependency Review is not enabled because this repository's dependency gra
 - Workflow YAML files parsed successfully.
 - Windows installer build with `electron-builder@26.18.0`: passed.
 - `npm audit --package-lock-only --audit-level=high`: passed; six moderate findings remain outside the configured failure threshold.
+
+## 2026-11-23 application and supply-chain follow-up
+
+The desktop request policy now rejects remote plaintext HTTP and permits HTTP only for
+enabled loopback environments. Token acquisition is also limited to HTTPS or loopback
+HTTP, including token endpoints that use Basic or Bearer credentials.
+
+Release builds now require code signing. Windows installer signing is enabled, and
+the default macOS build no longer disables signing or notarization.
+
+The vulnerable `minimatch` versions in the Electron packaging toolchain are
+overridden to `^11.0.1`.
+
+Validation:
+
+- `npm audit`: 0 vulnerabilities.
+- `npm audit --omit=dev`: 0 vulnerabilities.
+- `npm test`: 177 tests passed.
+- `npm run typecheck`: passed.
+- `npm run build`: passed.

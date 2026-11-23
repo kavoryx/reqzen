@@ -2,7 +2,11 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('desktop', {
+  platform: process.platform === 'darwin' ? 'mac' : process.platform === 'win32' ? 'win' : 'linux',
   openSnapshot: (options) => ipcRenderer.invoke('snapshot:open', options),
+  listSnapshots: () => ipcRenderer.invoke('snapshot:list'),
+  selectSnapshot: (id) => ipcRenderer.invoke('snapshot:select', { id }),
+  removeSnapshot: (id) => ipcRenderer.invoke('snapshot:remove', { id }),
   lastSnapshot: () => ipcRenderer.invoke('snapshot:last'),
   runRequest: (run) => ipcRenderer.invoke('request:run', run),
   modelStatus: () => ipcRenderer.invoke('model:status'),
@@ -48,10 +52,16 @@ contextBridge.exposeInMainWorld('desktop', {
   generateOverview: (input) => ipcRenderer.invoke('docs:overview', input),
   saveScanRules: (input) => ipcRenderer.invoke('scanRules:save', input),
   closeWindow: () => ipcRenderer.invoke('window:close'),
+  setWindowAppearance: (mode) => ipcRenderer.invoke('window:appearance', mode),
   onCloseRequest: (callback) => {
     const handler = () => callback();
     ipcRenderer.on('window:close-request', handler);
     return () => ipcRenderer.removeListener('window:close-request', handler);
+  },
+  onSettingsOpen: (callback) => {
+    const handler = () => callback();
+    ipcRenderer.on('settings:open', handler);
+    return () => ipcRenderer.removeListener('settings:open', handler);
   },
   findInPage: (input) => ipcRenderer.invoke('find:run', input),
   stopFind: () => ipcRenderer.invoke('find:stop'),

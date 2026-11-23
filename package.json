@@ -5,20 +5,33 @@
   "description": "Reqzen is a local-first, AI-assisted API explorer and REST API client: scan Java, JavaScript/TypeScript, and Python projects or OpenAPI 3 definitions in GitHub repositories, search APIs, plan and test requests, and export Postman collections.",
   "main": "main.js",
   "scripts": {
-    "start": "electron .",
-    "dist:mac": "electron-builder --mac -c.mac.identity=null -c.mac.notarize=false --publish never",
-    "dist:mac-signed": "electron-builder --mac",
-    "dist:win": "electron-builder --win --publish never",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "start": "npm run build && electron .",
+    "dist:mac": "npm run build && electron-builder --mac --publish never",
+    "dist:mac-signed": "npm run build && electron-builder --mac",
+    "dist:win": "npm run build && electron-builder --win --publish never",
     "test": "node --test test/*.test.js"
   },
   "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
     "electron": "^45.3.2",
-    "electron-builder": "^26.18.0"
+    "electron-builder": "^26.18.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8"
+  },
+  "overrides": {
+    "minimatch": "^11.0.1"
   },
   "productName": "Reqzen",
   "build": {
     "appId": "com.apiexplorer.desktop",
     "productName": "Reqzen",
+    "forceCodeSigning": true,
     "files": [
       "main.js",
       "preload.js",
@@ -34,7 +47,7 @@
       "target": [
         "nsis"
       ],
-      "signAndEditExecutable": false
+      "signAndEditExecutable": true
     },
     "mac": {
       "category": "public.app-category.developer-tools",

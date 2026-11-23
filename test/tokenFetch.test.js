@@ -20,6 +20,10 @@ test('the token call accepts unlisted http and https hosts and still requires co
   assert.deepEqual(tokenFetch.checkTokenRun(run(), {}, env), []);
   assert.deepEqual(tokenFetch.checkTokenRun(run({ url: 'https://csp.example.test/token' }), {}, env), []);
   assert.deepEqual(tokenFetch.checkTokenRun(run({ url: 'http://localhost:8080/token' }), {}, env), []);
+  assert.ok(tokenFetch.checkTokenRun(run({ url: 'http://login.example.test/token' }), {}, env)
+    .some((problem) => problem.includes('Plain HTTP is allowed only for localhost')));
+  assert.ok(tokenFetch.validateTokenType({ mode: 'request', url: 'http://login.example.test/token' }).problems
+    .some((problem) => problem.includes('Plain HTTP is allowed only for localhost')));
   assert.ok(tokenFetch.checkTokenRun(run({ url: 'https://csp.example.test/token' }), {}, null)
     .some((p) => p.includes('Choose an environment that is turned on')));
   assert.ok(tokenFetch.checkTokenRun(run({ url: 'ftp://api.example.test/token' }), {}, env).includes('Only http and https addresses can be used.'));

@@ -1,12 +1,14 @@
 // Electron main process. It owns the file dialog, file reading, and the only network calls the app makes:
 // one checked request at a time, to hosts listed in configured environments (see lib/runPolicy.js).
-const { app, BrowserWindow, dialog, ipcMain, Menu, session } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, session } = require('electron');
 
 // Keep the data folder that earlier versions used, so saved environments and the last snapshot survive the rename.
 app.setPath('userData', require('path').join(app.getPath('appData'), 'API Explorer'));
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { checkRun, scrubToken } = require('./lib/runPolicy');
+const { platformWindowOptions } = require('./lib/windowOptions');
 const aiRedaction = require('./lib/aiRedaction');
 const { send } = require('./lib/httpRun');
 const confirmations = require('./lib/confirmations');
@@ -51,6 +53,10 @@ let githubClonesDir = null;
 let docSettingsFile = null;
 const providerApiKeys = { claude: '', openai: '' };
 const savedLibrary = () => (libraryFile ? library.load(libraryFile) : library.sanitizeStore({}));
+const reconcileSavedLibrary = (operations) => {
+  if (!libraryFile) return savedLibrary();
+  return library.save(libraryFile, library.reconcileStore(savedLibrary(), operations || []));
+};
 const savedPayloads = () => (payloadsFile ? payloads.load(payloadsFile) : {});
 // Shared variables such as orgId, kept on this computer.
 const savedVariables = () => {
@@ -72,6 +78,106 @@ const hiddenIds = () => {
     return [];
   }
 };
+
+function readWorkspaceSnapshots() {
+  if (!workspaceSnapshotsFile || !fs.existsSync(workspaceSnapshotsFile)) return [];
+  try {
+    const saved = JSON.parse(fs.readFileSync(workspaceSnapshotsFile, 'utf8'));
+    const rows = Array.isArray(saved) ? saved : [];
+    return rows.filter((item) =>
+      item
+      && typeof item.id === 'string'
+      && typeof item.name === 'string'
+      && typeof item.text === 'string'
+      && safeParse(item.text)?.format === 'api-explorer-snapshot'
+    ).slice(-25);
+  } catch {
+    return [];
+  }
+}
+
+function saveWorkspaceSnapshots(items) {
+  if (!workspaceSnapshotsFile) return;
+  fs.mkdirSync(path.dirname(workspaceSnapshotsFile), { recursive: true });
+  fs.writeFileSync(workspaceSnapshotsFile, JSON.stringify(items.slice(-25), null, 2), { mode: 0o600 });
+}
+
+function workspaceOperations() {
+  return readWorkspaceSnapshots().flatMap((item) => {
+    const parsed = safeParse(item.text);
+    return parsed && Array.isArray(parsed.operations) ? parsed.operations : [];
+  });
+}
+
+function workspaceSnapshotSummary(item) {
+  const parsed = safeParse(item.text);
+  return {
+    id: item.id,
+    name: item.name,
+    createdAt: item.createdAt || '',
+    operationCount: Array.isArray(parsed?.operations) ? parsed.operations.length : 0,
+    serviceCount: Array.isArray(parsed?.services) ? parsed.services.length : 0,
+  };
+}
+
+function rememberWorkspaceSnapshot(name, text) {
+  if (!workspaceSnapshotsFile) return null;
+  const hash = crypto.createHash('sha256').update(text).digest('hex').slice(0, 20);
+  const items = readWorkspaceSnapshots();
+  const existing = items.find((item) => item.id === hash);
+  const item = existing || { id: hash, name, text, createdAt: new Date().toISOString() };
+  if (!existing) items.push(item);
+  else if (existing.name !== name) existing.name = name;
+  saveWorkspaceSnapshots(items);
+  return item;
+}
+
+function activateWorkspaceSnapshot(id) {
+  const item = readWorkspaceSnapshots().find((row) => row.id === id);
+  if (!item) return null;
+  const parsed = withKnownEnvironments(safeParse(item.text));
+  if (!parsed) return null;
+  openSnapshot = parsed;
+  activeSnapshotId = item.id;
+  rememberEnvironments(parsed);
+  saveLastSnapshot(item.name, item.text);
+  return { ...workspaceSnapshotSummary(item), text: JSON.stringify(parsed) };
+}
+
+function removeWorkspaceSnapshot(id) {
+  const before = readWorkspaceSnapshots();
+  const selectedId = before.some((item) => item.id === id) ? id : activeSnapshotId;
+  const removed = before.find((item) => item.id === selectedId);
+  if (!removed) return { ok: false, problems: ['Choose a workspace snapshot to remove.'] };
+  const left = before.filter((item) => item.id !== selectedId);
+  saveWorkspaceSnapshots(left);
+  if (activeSnapshotId === selectedId) {
+    const next = left[left.length - 1];
+    if (next) activateWorkspaceSnapshot(next.id);
+    else {
+      activeSnapshotId = '';
+      openSnapshot = null;
+      try {
+        if (lastSnapshotFile && fs.existsSync(lastSnapshotFile)) fs.unlinkSync(lastSnapshotFile);
+      } catch (error) {
+        return { ok: false, problems: [error instanceof Error ? error.message : 'The active snapshot could not be cleared.'] };
+      }
+    }
+  }
+  reconcileSavedLibrary(workspaceOperations());
+  let environmentCacheRemoved = false;
+  if (left.length === 0 && envCacheFile && fs.existsSync(envCacheFile)) {
+    try {
+      fs.unlinkSync(envCacheFile);
+      environmentCacheRemoved = true;
+    } catch {
+      environmentCacheRemoved = false;
+    }
+  }
+  for (const window of BrowserWindow.getAllWindows()) window.webContents.send('snapshot:removed', { id: selectedId });
+  return { ok: true, removedId: selectedId, activeId: activeSnapshotId, environmentCacheRemoved };
+}
+
 const saveHiddenIds = (ids) => {
   fs.mkdirSync(path.dirname(hiddenFile), { recursive: true });
   fs.writeFileSync(hiddenFile, JSON.stringify(ids, null, 2), { mode: 0o600 });
@@ -91,6 +197,7 @@ function currentView() {
 }
 
 const MAX_SNAPSHOT_BYTES = 50 * 1024 * 1024;
+let windowAppearanceMode = 'system';
 const CONTENT_POLICY = [
   "default-src 'self'",
   "script-src 'self'",
@@ -104,11 +211,17 @@ const CONTENT_POLICY = [
 ].join('; ');
 
 function createWindow() {
+  const darkChrome = windowAppearanceMode === 'dark'
+    || (windowAppearanceMode === 'system' && nativeTheme.shouldUseDarkColors);
   const win = new BrowserWindow({
     width: 1280,
     height: 860,
+    minWidth: 1024,
+    minHeight: 700,
     icon: path.join(__dirname, 'build', 'icon.png'),
     title: 'Reqzen',
+    backgroundColor: darkChrome ? '#171B22' : '#F6F7F9',
+    ...platformWindowOptions(process.platform, darkChrome),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -116,13 +229,36 @@ function createWindow() {
       sandbox: true,
     },
   });
-  win.loadFile(path.join(__dirname, 'app', 'index.html'));
+  const loadUi = async (mode) => {
+    const file = path.join(__dirname, 'app', mode === 'classic' ? 'classic' : 'renderer', 'index.html');
+    try {
+      await win.loadFile(file);
+    } catch (error) {
+      dialog.showErrorBox('Reqzen could not open this workspace', error instanceof Error ? error.message : 'The UI file could not be loaded.');
+    }
+  };
+  void loadUi('renderer');
 
   // Find in page: Cmd+F (Ctrl+F elsewhere) opens the find bar in the page. Edit roles keep copy and paste working.
   const sendToPage = (channel, ...args) => { if (!win.isDestroyed()) win.webContents.send(channel, ...args); };
   win.webContents.on('found-in-page', (_event, result) => sendToPage('find:result', { active: result.activeMatchOrdinal, total: result.matches }));
   Menu.setApplicationMenu(Menu.buildFromTemplate([
-    ...(process.platform === 'darwin' ? [{ role: 'appMenu' }] : []),
+    ...(process.platform === 'darwin' ? [{
+      label: app.name,
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: () => sendToPage('settings:open') },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    }] : []),
     {
       label: 'Edit',
       submenu: [
@@ -136,7 +272,7 @@ function createWindow() {
       submenu: [{
         label: 'Remove loaded snapshot…',
         click: async () => {
-          if (!openSnapshot && (!lastSnapshotFile || !fs.existsSync(lastSnapshotFile))) {
+          if (!openSnapshot) {
             await dialog.showMessageBox(win, {
               type: 'info',
               message: 'There is no loaded snapshot to remove.',
@@ -153,36 +289,30 @@ function createWindow() {
           });
           if (choice.response !== 1) return;
 
-          try {
-            if (lastSnapshotFile && fs.existsSync(lastSnapshotFile)) fs.unlinkSync(lastSnapshotFile);
-          } catch (error) {
+          const removed = removeWorkspaceSnapshot(activeSnapshotId);
+          if (!removed.ok) {
             await dialog.showMessageBox(win, {
               type: 'error',
               message: 'The loaded snapshot could not be removed.',
-              detail: error.message,
+              detail: (removed.problems || []).join(' '),
             });
             return;
-          }
-
-          openSnapshot = null;
-          let cacheError = null;
-          try {
-            if (envCacheFile && fs.existsSync(envCacheFile)) fs.unlinkSync(envCacheFile);
-          } catch (error) {
-            cacheError = error;
-          }
-          if (cacheError) {
-            await dialog.showMessageBox(win, {
-              type: 'error',
-              message: 'The snapshot was removed, but its cached environments could not be removed.',
-              detail: cacheError.message,
-            });
           }
           win.webContents.reload();
         },
       }],
     },
-    { role: 'viewMenu' },
+    {
+      label: 'View',
+      submenu: [
+        { label: 'Modern workspace', accelerator: 'CmdOrCtrl+Shift+R', click: () => { void loadUi('renderer'); } },
+        { label: 'Classic workspace', click: () => { void loadUi('classic'); } },
+        { type: 'separator' },
+        { role: 'reload' }, { role: 'forceReload' }, { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { role: 'togglefullscreen' },
+      ],
+    },
     {
       label: 'Window',
       // Cmd+W closes the dialog in front (the page decides); with no dialog open, the page asks for the window to close.
@@ -204,6 +334,38 @@ ipcMain.handle('find:run', (event, input) => {
 ipcMain.handle('window:close', (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   if (win && !win.isDestroyed()) win.close();
+});
+
+ipcMain.handle('window:appearance', (event, mode) => {
+  if (!['system', 'light', 'dark'].includes(mode)) return { ok: false, problem: 'Choose system, light, or dark appearance.' };
+  windowAppearanceMode = mode;
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win && !win.isDestroyed()) {
+    const dark = mode === 'dark' || (mode === 'system' && nativeTheme.shouldUseDarkColors);
+    win.setBackgroundColor(dark ? '#171B22' : '#F6F7F9');
+    if (process.platform === 'win32') {
+      win.setTitleBarOverlay({
+        color: dark ? '#171B22' : '#F6F7F9',
+        symbolColor: dark ? '#A3ADBD' : '#526071',
+        height: 48,
+      });
+    }
+  }
+  return { ok: true };
+});
+
+nativeTheme.on('updated', () => {
+  if (windowAppearanceMode !== 'system' || process.platform !== 'win32') return;
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (win.isDestroyed()) continue;
+    const dark = nativeTheme.shouldUseDarkColors;
+    win.setBackgroundColor(dark ? '#171B22' : '#F6F7F9');
+    win.setTitleBarOverlay({
+      color: dark ? '#171B22' : '#F6F7F9',
+      symbolColor: dark ? '#A3ADBD' : '#526071',
+      height: 48,
+    });
+  }
 });
 
 ipcMain.handle('find:stop', (event) => {
@@ -240,16 +402,26 @@ ipcMain.handle('snapshot:open', async (event, options) => {
   }
   const text = fs.readFileSync(file, 'utf8');
   openSnapshot = safeParse(text);
+  if (!openSnapshot || openSnapshot.format !== 'api-explorer-snapshot'
+    || !Array.isArray(openSnapshot.operations) || !Array.isArray(openSnapshot.services)) {
+    openSnapshot = null;
+    throw new Error('This file is not a supported Reqzen API snapshot.');
+  }
   rememberEnvironments(openSnapshot);
   const types = options && options.compareOnly === true ? null : importSnapshotTokenTypes(openSnapshot);
   const name = path.basename(file);
+  const workspaceItem = rememberWorkspaceSnapshot(name, text);
+  if (workspaceItem) activeSnapshotId = workspaceItem.id;
+  reconcileSavedLibrary(workspaceOperations());
   saveLastSnapshot(name, text);
-  return { name, text, types };
+  return { id: workspaceItem?.id || '', name, text, types };
 });
 
 // The last snapshot is copied into the app's data folder, so startup can load it without asking again, even if the
 // original file has moved. Only the most recent one is kept, and it is replaced when another file is opened.
 let lastSnapshotFile = null;
+let workspaceSnapshotsFile = null;
+let activeSnapshotId = '';
 
 // The environments of the last snapshot that had any. A source scan has none of its own, so they are kept here and given
 // to the scan, so the token panel still lists them after a restart.
@@ -303,18 +475,39 @@ function saveLastSnapshot(name, text) {
 }
 
 ipcMain.handle('snapshot:last', () => {
+  const items = readWorkspaceSnapshots();
+  if (items.length > 0) {
+    const selected = items.find((item) => item.id === activeSnapshotId) || items[items.length - 1];
+    return activateWorkspaceSnapshot(selected.id);
+  }
   if (!lastSnapshotFile || !fs.existsSync(lastSnapshotFile)) return null;
   try {
     const saved = JSON.parse(fs.readFileSync(lastSnapshotFile, 'utf8'));
     if (!saved || typeof saved.name !== 'string' || typeof saved.text !== 'string') return null;
     const parsed = withKnownEnvironments(safeParse(saved.text));
     if (!parsed || parsed.format !== 'api-explorer-snapshot') return null;
+    const workspaceItem = rememberWorkspaceSnapshot(saved.name, saved.text);
     openSnapshot = parsed;
-    return { name: saved.name, text: JSON.stringify(parsed) };
+    activeSnapshotId = workspaceItem?.id || '';
+    return { id: activeSnapshotId, name: saved.name, text: JSON.stringify(parsed) };
   } catch {
     return null;
   }
 });
+
+ipcMain.handle('snapshot:list', () => ({
+  activeId: activeSnapshotId,
+  snapshots: readWorkspaceSnapshots().map(workspaceSnapshotSummary),
+}));
+
+ipcMain.handle('snapshot:select', (_event, input) => {
+  const id = input && typeof input.id === 'string' ? input.id : '';
+  const selected = activateWorkspaceSnapshot(id);
+  return selected ? { ok: true, snapshot: selected } : { ok: false, problems: ['That snapshot is no longer available.'] };
+});
+
+ipcMain.handle('snapshot:remove', (_event, input) =>
+  removeWorkspaceSnapshot(input && typeof input.id === 'string' ? input.id : activeSnapshotId));
 
 function safeParse(text) {
   try {
@@ -360,6 +553,7 @@ const savedDocSettings = () => {
     const data = JSON.parse(fs.readFileSync(docSettingsFile, 'utf8'));
     const settings = data && typeof data === 'object' ? data : {};
     aiRedaction.registerSensitiveValues(settings);
+    if (docProviderFor(settings) === 'local') ollama.configure(settings);
     return settings;
   } catch {
     return {};
@@ -407,7 +601,7 @@ let docJobStop = false;
 
 const usableOperation = (o) => ({
   revisionId: o.revisionId, httpMethod: o.httpMethod, pathTemplate: o.pathTemplate, serviceName: o.serviceName,
-  summary: o.summary, lifecycleStatus: o.lifecycleStatus, definition: o.definition,
+  summary: o.summary, contractVersion: o.contractVersion, lifecycleStatus: o.lifecycleStatus, definition: o.definition,
 });
 
 function docChat() {
@@ -441,15 +635,11 @@ async function modelReady() {
   return st && st.available ? { ok: true } : { ok: false, reason: `The local model is not running${st && st.reason ? ` (${st.reason})` : ''}. Start it to write descriptions.` };
 }
 
-/**
- * Called after a fresh scan. Starts the background run when the flag is on and a model is ready; otherwise says why not.
- * The scan result is returned at once; the run continues behind it.
- */
+/** Starts a background documentation run after a scan, using factual descriptions when AI is unavailable. */
 async function afterScanDocs(text, flag) {
   if (flag === false) return { status: 'skipped', reason: 'Writing descriptions was turned off for this scan.' };
   if (docJob.state === 'running') return { status: 'busy', reason: 'A documentation run is already in progress.' };
   const ready = await modelReady();
-  if (!ready.ok) return { status: 'skipped', reason: ready.reason };
   if (!docsFile) return { status: 'skipped', reason: 'The app is not ready yet.' };
   let snapshot;
   try {
@@ -461,17 +651,18 @@ async function afterScanDocs(text, flag) {
   const ops = (snapshot.operations || []).filter((o) => docJobNeeds(o, docs)).map(usableOperation);
   if (ops.length === 0) return { status: 'done', total: 0, reason: 'Every API already has a description.' };
   aiRedaction.registerSensitiveValues(ops);
-  const { source, chat } = docChat();
+  const { source, chat } = ready.ok ? docChat() : { source: 'template', chat: async () => '' };
+  const reason = ready.ok ? '' : `AI is unavailable. Creating factual documentation from the API contract. ${ready.reason || ''}`.trim();
   docJobStop = false;
-  docJob = { state: 'running', total: ops.length, done: 0, fromModel: 0, factual: 0, reason: '' };
+  docJob = { state: 'running', total: ops.length, done: 0, fromModel: 0, factual: 0, reason };
   runDocumentation({
     operations: ops, chat, source, instructions: docInstructions('auto'),
     save: (results) => docAgent.merge(docsFile, results),
     shouldStop: () => docJobStop,
-    onProgress: (status) => { docJob = { ...docJob, ...status }; },
-  }).then((status) => { docJob = { ...docJob, ...status }; })
+    onProgress: (status) => { docJob = { ...docJob, ...status, reason: status.reason || docJob.reason || '' }; },
+  }).then((status) => { docJob = { ...docJob, ...status, reason: status.reason || docJob.reason || '' }; })
     .catch((e) => { docJob = { ...docJob, state: 'failed', reason: String(e && e.message ? e.message : 'The run failed.') }; });
-  return { status: 'started', total: ops.length };
+  return { status: 'started', total: ops.length, factualFallback: !ready.ok, reason };
 }
 
 ipcMain.handle('docs:get', () => ({
@@ -483,8 +674,8 @@ ipcMain.handle('docs:get', () => ({
   defaultInstructions: docAgent.DEFAULT_INSTRUCTIONS,
   generateAfterScan: generateAfterScanSaved(),
   hasKey: activeApiKey() !== '',
-  baseUrl: openaiSettings().baseUrl,
-  model: openaiSettings().model,
+  baseUrl: docProvider() === 'openai' ? openaiSettings().baseUrl : (docProvider() === 'local' ? savedDocSettings().baseUrl || 'http://127.0.0.1:11434' : ''),
+  model: docProvider() === 'openai' ? openaiSettings().model : (savedDocSettings().model || ''),
 }));
 
 ipcMain.handle('docs:settings', (_event, input) => {
@@ -513,6 +704,7 @@ ipcMain.handle('docs:settings', (_event, input) => {
   if (input && typeof input.generateAfterScan === 'boolean') next.generateAfterScan = input.generateAfterScan;
   fs.mkdirSync(path.dirname(docSettingsFile), { recursive: true });
   fs.writeFileSync(docSettingsFile, JSON.stringify(next), { mode: 0o600 });
+  if (docProviderFor(next) === 'local') ollama.configure(next);
   for (const window of BrowserWindow.getAllWindows()) window.webContents.send('model:settings-changed');
   return {
     ok: true,
@@ -551,25 +743,23 @@ ipcMain.handle('docs:generate', async (_event, input) => {
   const usable = ops.filter((o) => o && typeof o.revisionId === 'string' && o.definition).map(usableOperation);
   if (usable.length === 0) return { ok: false, problem: 'No APIs to describe.' };
   aiRedaction.registerSensitiveValues(usable);
-  const { source, chat } = docChat();
-  if (source === 'claude' && activeApiKey() === '') return { ok: false, problem: 'Enter an API key in AI settings first.' };
-  try {
-    const { results, modelFailures } = await docAgent.runDocAgent({ operations: usable, chat, source, instructions: docInstructions('manual') });
-    if (modelFailures === usable.length) {
-      return {
-        ok: false,
-        problem: source === 'claude'
-          ? 'The Claude API did not answer. Check the key and connection.'
-          : source === 'openai'
-            ? 'The configured AI model did not answer. Check the server address, model, and API key.'
-            : 'The local model did not answer. Check that it is running.',
-      };
-    }
-    const docs = docAgent.merge(docsFile, results);
-    return { ok: true, docs, written: results.length, fromModel: results.filter((r) => r.source !== 'template').length };
-  } catch (e) {
-    return { ok: false, problem: e instanceof Error ? e.message : 'The documentation agent failed.' };
-  }
+  const ready = await modelReady();
+  const model = ready.ok ? docChat() : { source: 'template', chat: async () => '' };
+  const { source, chat } = model;
+  docJobStop = false;
+  const fallbackReason = ready.ok ? '' : 'The AI provider is unavailable, so Reqzen is creating factual documentation from the API contract.';
+  docJob = { state: 'running', total: usable.length, done: 0, fromModel: 0, factual: 0, reason: fallbackReason };
+  runDocumentation({
+    operations: usable,
+    chat,
+    source,
+    instructions: docInstructions('manual'),
+    save: (results) => docAgent.merge(docsFile, results),
+    shouldStop: () => docJobStop,
+    onProgress: (status) => { docJob = { ...docJob, ...status }; },
+  }).then((status) => { docJob = { ...docJob, ...status }; })
+    .catch((e) => { docJob = { ...docJob, state: 'failed', reason: String(e && e.message ? e.message : 'The run failed.') }; });
+  return { ok: true, started: true, total: usable.length, factualFallback: !ready.ok, reason: fallbackReason };
 });
 
 ipcMain.handle('docs:overview', async (_event, input) => {
@@ -878,6 +1068,9 @@ function rememberScan(sources, text) {
     const parsed = safeParse(text);
     if (!parsed || parsed.format !== 'api-explorer-snapshot') return;
     const names = sources.map((s) => s.service.trim() || path.basename(s.path.trim() || s.repo.trim())).filter(Boolean).join(', ');
+    const workspaceItem = rememberWorkspaceSnapshot(`Source scan: ${names}`, JSON.stringify(parsed));
+    if (workspaceItem) activeSnapshotId = workspaceItem.id;
+    reconcileSavedLibrary(workspaceOperations());
     openSnapshot = parsed;
     saveLastSnapshot(`Source scan: ${names}`, JSON.stringify(withKnownEnvironments(parsed)));
   } catch {
@@ -914,7 +1107,8 @@ ipcMain.handle('github:scan', async (_event, input) => {
     try {
       const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
       rememberScan(sources, saved.text);
-      return { ok: true, cached: true, mode, scannedAt: saved.scannedAt, text: saved.text, report: saved.report, clonePaths: [], documentation: null };
+      const documentation = await afterScanDocs(saved.text, input && typeof input.generateDocs === 'boolean' ? input.generateDocs : undefined);
+      return { ok: true, cached: true, mode, scannedAt: saved.scannedAt, text: saved.text, report: saved.report, clonePaths: [], documentation };
     } catch {
       // A damaged saved scan is ignored and the source is read again.
     }
@@ -983,7 +1177,26 @@ ipcMain.handle('projects:findLocal', (_event, input) => {
 ipcMain.handle('projects:findGitHub', async (_event, input) => {
   aiRedaction.registerSensitiveValues(input);
   aiRedaction.registerSecret(input && input.token, 1);
-  const repo = githubScan.parseRepo(input && input.repo);
+  if (input && input.mode === 'api') {
+    const repoInput = `${String(input.repo || '').trim()}${String(input.branch || '').trim() ? `@${String(input.branch).trim()}` : ''}`;
+    const repo = githubScan.parseRepo(repoInput);
+    const folder = githubScan.cleanPath(input.path ? input.path : '');
+    if (!repo || folder === null) return { ok: false, problems: ['Check the repository, branch, and folder addresses.'] };
+    return {
+      ok: true,
+      projects: [{
+        name: folder ? folder.split('/').pop() : repo.repo,
+        path: folder,
+        manifest: `GitHub API · ${repo.owner}/${repo.repo}${repo.ref ? `@${repo.ref}` : ''}`,
+        languages: [],
+        frameworks: [],
+        operations: 0,
+      }],
+      notes: ['Remote API mode inspects supported source files through GitHub.'],
+    };
+  }
+  const repoInput = `${String(input && input.repo || '').trim()}${String(input && input.branch || '').trim() ? `@${String(input.branch).trim()}` : ''}`;
+  const repo = githubScan.parseRepo(repoInput);
   const folder = githubScan.cleanPath(input && input.path ? input.path : '');
   if (!repo || folder === null) return { ok: false, problems: ['Check the repository and folder addresses.'] };
   if (!githubClonesDir) return { ok: false, problems: ['The app is not ready yet.'] };
@@ -1268,6 +1481,7 @@ app.whenReady().then(() => {
   overridesFile = path.join(app.getPath('userData'), 'environment-overrides.json');
   hiddenFile = path.join(app.getPath('userData'), 'environment-hidden.json');
   lastSnapshotFile = path.join(app.getPath('userData'), 'snapshot', 'last-snapshot.json');
+  workspaceSnapshotsFile = path.join(app.getPath('userData'), 'snapshot', 'workspace-snapshots.json');
   envCacheFile = path.join(app.getPath('userData'), 'snapshot', 'environments.json');
   savedVariables();
   savedTokenTypes();
