@@ -46,9 +46,14 @@ test('a custom request can use a manually configured environment without a catal
     .some((problem) => problem.includes('not an enabled environment')));
 });
 
-test('allows http to any host but restricts https to enabled hosts', () => {
-  assert.deepEqual(checkRun(snapshot, run({ url: 'http://localhost:3000/x' })).problems, []);
-  assert.deepEqual(checkRun(snapshot, run({ url: 'http://other.example.test/x' })).problems, []);
+test('allows http only to an enabled loopback environment and restricts https to enabled hosts', () => {
+  const local = {
+    environments: [{ name: 'Local', enabled: true, baseUrl: 'http://localhost:3000' }],
+    serviceOverrides: [],
+  };
+  assert.deepEqual(checkRun(local, run({ url: 'http://localhost:3000/x', environmentName: 'Local', confirmEnvironment: 'Local' })).problems, []);
+  assert.ok(checkRun(snapshot, run({ url: 'http://other.example.test/x' })).problems
+    .some((problem) => problem.includes('Plain HTTP is allowed only for localhost')));
   assert.ok(checkRun(snapshot, run({ url: 'ftp://dev.example.test/x' })).problems.includes('Only http and https addresses can be used.'));
   assert.ok(checkRun(snapshot, run({ url: 'https://u:p@dev.example.test/x' })).problems.some((p) => p.includes('user name')));
   assert.ok(checkRun(snapshot, run({ url: 'https://evil.example.com/x' })).problems.some((p) => p.includes('not an enabled environment')));

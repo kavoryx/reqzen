@@ -93,7 +93,7 @@ AI provider keys are separate: they are sent to the configured provider only for
 - macOS to build a macOS disk image. Build x64 on an Intel Mac or arm64 on an Apple-silicon Mac; the release workflow builds both.
 - Git only for workflows that clone GitHub repositories. Local-folder scanning does not require Git.
 
-The compiled app UI is included; no separate frontend build is required. You do not need Python, Java, or any of the scanned languages installed to run the app. A scanned project's dependencies do not need to be installed because scanning reads source files statically.
+The editable React and TypeScript renderer lives in `ui/` and is bundled into `app/` by Vite. `npm start` and each installer script build the renderer before launching or packaging the Electron app. End users do not need Node.js or a separate frontend installation. You do not need Python, Java, or any of the scanned languages installed to run the app; a scanned project's dependencies do not need to be installed because scanning reads source files statically.
 
 ### Clone, install dependencies, test, and run
 
@@ -107,7 +107,7 @@ npm test
 npm start
 ```
 
-Run npm commands from the repository root (the directory containing `package.json`). `npm ci` installs the locked development dependencies; `npm test` runs the automated test suite; `npm start` launches the app from source.
+Run npm commands from the repository root (the directory containing `package.json`). `npm ci` installs the locked development dependencies; `npm test` runs the automated test suite; `npm run typecheck` checks the TypeScript renderer; `npm run build` builds it; `npm start` builds and launches the app from source.
 
 ### Automated security checks
 
@@ -158,6 +158,7 @@ Reqzen is an API source code scanner, searchable API catalog, and desktop API cl
 - [Windows setup and build](docs/WINDOWS.md)
 - [macOS setup, build, and signing](docs/MACOS.md)
 - [Privacy Policy](docs/PRIVACY.md)
+- [UI architecture and keyboard shortcuts](docs/UI-ARCHITECTURE.md)
 
 ## License
 
