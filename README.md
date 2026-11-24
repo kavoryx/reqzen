@@ -46,17 +46,28 @@ Reqzen includes scanning support for Spring Boot (Java), NestJS and Express-styl
 
 ### AI-assisted API workflows
 
-- **AI API search:** Ask a question in natural language. Reqzen searches locally first, then optional AI agents help interpret the question and rank matching operations. If a model is unavailable, the regular search results remain usable.
+- **AI API search:** Ask a question in natural language. Local search ranks resource names, method, version, service, summary, description, and custom API fields, including common action words and collection versus individual routes. Optional AI agents can rerank candidates; regular search remains available when AI is off or unavailable.
 - **Request planning:** Describe the API call you want to make and get suggested values for declared path, query, and header parameters, plus a request body when applicable. Review and edit the request before sending it; planning does not send API calls.
 - **API documentation:** Generate draft descriptions for operations and overviews for services from contract details. Generated text is marked by its source, and factual fallback text is available when a model cannot provide a usable draft.
+- **External documentation:** In **Settings → Documentation**, copy the source-to-snapshot prompt to use with a source-aware external tool, or export the current catalog and copy the enrichment prompt. Save the complete JSON output and use **Import snapshot**. The prompts use saved manual instructions and the same factual writing rules as in-app generation; review all generated output. Exports can include selected environments, token types, and variables; source code and catalog details may also be sensitive—review them and the external provider's policies before sharing.
+- **Readability:** In **Settings → Appearance**, increase or decrease text and interface size. Reset returns to 100% using the platform's system font. This setting is saved locally.
 - **Provider choice and credential safeguards:** Use Ollama locally, Claude, or an OpenAI-compatible local or hosted service. Known API credentials are redacted from prompts, but review the privacy policy and avoid putting secrets in descriptions or AI instructions.
+
+### Sharing snapshots and custom API fields
+
+In the catalog, use **Catalog actions → Export snapshot** to choose services (and their APIs), environments, token types, and variables. Select all or individual entries in each group. Variable values and token request credentials/data require separate opt-ins; without the latter, request headers, bodies, URL credentials and query, and Basic credentials are removed. Session access tokens are never exported. Environment-specific variable values are included only for selected environments; a selected variable must have a shared value or a value for one of them. Catalog details, environment addresses, URL paths, and custom fields can still be sensitive: review the file before sharing.
+
+Open the shared JSON with **Import snapshot** or **Open snapshot**. Existing variables and token types with the same name are kept, not overwritten, and skipped imports are reported. The exported environments travel with the snapshot.
+API-based token types can be shared, but must be reconfigured as request-based token types to generate tokens in this workspace.
+
+Use **Catalog actions → Configure fields** to add up to 12 named text fields, edit their labels, and show or hide their columns. Open an API to edit its values; hidden fields remain searchable. Removing a field and saving also removes its values from all APIs in that snapshot. Fields are stored with the workspace snapshot and included in exports, so avoid secrets. External documentation prompts include configured fields and describe the same JSON format for other models or source-aware tools; imported snapshots may also define their own fields. Review model-generated content before use.
 
 ## Your first session
 
 1. **Choose a starting point.** Scan a local project, open a compatible catalog snapshot, scan a GitHub repository, or create a custom request. You do not need a catalog to create a request.
 2. **Explore the API.** Search the catalog and open an operation to inspect its method, path, parameters, and contract details.
 3. **Add an environment before sending.** Go to **Settings → Environments** and add a clear name and HTTP or HTTPS base address, or use an environment from your snapshot. HTTPS API requests are restricted to hosts in enabled environments; HTTP API and token requests can use any host.
-4. **Set up authentication if needed.** Enter a session access token, configure a token type, or use the supported authorization options for a custom request. A token type can use a catalog API or a manually configured HTTP or HTTPS token request.
+4. **Set up authentication if needed.** Enter a session access token, configure a token type, or use the supported authorization options for a custom request. In **Settings → Tokens**, add a request-based token type manually or fill it from a curl command. You can copy the configured request as curl or test it against an enabled environment before saving; the test does not change the session token. Imported Bearer values are not saved. Curl commands, request bodies, headers, and Basic credentials may contain secrets, so review them before copying or sharing.
 5. **Review, then send.** Choose the environment, check the complete request, and send it when you are ready. Write operations, production environments, or incomplete API contracts may require extra confirmation.
 6. **Keep what you’ll reuse.** Favourite APIs, create collections, save custom requests, or export a collection or workspace.
 

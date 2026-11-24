@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('desktop', {
   listSnapshots: () => ipcRenderer.invoke('snapshot:list'),
   selectSnapshot: (id) => ipcRenderer.invoke('snapshot:select', { id }),
   removeSnapshot: (id) => ipcRenderer.invoke('snapshot:remove', { id }),
+  saveSnapshotCustomFields: (input) => ipcRenderer.invoke('snapshot:saveCustomFields', input),
   lastSnapshot: () => ipcRenderer.invoke('snapshot:last'),
   runRequest: (run) => ipcRenderer.invoke('request:run', run),
   modelStatus: () => ipcRenderer.invoke('model:status'),
@@ -53,6 +54,7 @@ contextBridge.exposeInMainWorld('desktop', {
   saveScanRules: (input) => ipcRenderer.invoke('scanRules:save', input),
   closeWindow: () => ipcRenderer.invoke('window:close'),
   setWindowAppearance: (mode) => ipcRenderer.invoke('window:appearance', mode),
+  setTextScale: (scale) => ipcRenderer.invoke('window:text-scale', scale),
   onCloseRequest: (callback) => {
     const handler = () => callback();
     ipcRenderer.on('window:close-request', handler);

@@ -14,7 +14,7 @@ The preload exposes the runtime platform as `window.desktop.platform` (`mac`, `w
 
 The app remains a single renderer and keeps the existing `window.desktop` IPC bridge for file dialogs, scanning, settings, and checked API requests. The renderer does not send network requests directly. Request execution and destination checks remain in the Electron main process.
 
-The original compiled renderer is retained at `app/classic/` as a compatibility route while advanced workflows are migrated to source. Choose **More features · Classic workspace** in the modern toolbar menu to reach it; use **View → Modern workspace** (or `Ctrl/Cmd+Shift+R`) to return. Keep both entry points until token types, documentation generation, scan rules, snapshot comparison, and workspace import/export have source-renderer equivalents.
+Electron loads the source-built renderer from `app/renderer/`.
 
 ## Navigation and shortcuts
 

@@ -56,3 +56,20 @@ test('a variable matches a parameter whatever the spelling: orgId, org_id, org-i
     assert.equal(vars.valuesFor(list, 'x')[vars.variableKey(key)].value, 'org-1', key);
   }
 });
+
+test('snapshot variables preserve existing values and report conflicts, invalid values and unavailable environments', () => {
+  const existing = [{ id: 'var:1', name: 'orgId', value: 'original', byEnvironment: {} }];
+  const merged = vars.mergeRows(existing, [
+    { name: 'ORGID', value: 'replacement', byEnvironment: {} },
+    { name: 'region', value: 'shared', byEnvironment: { 'env-int': 'int', 'env-other': 'secret' } },
+    { name: 'empty', value: '', byEnvironment: { 'env-other': 'secret' } },
+    { name: 'invalid name', value: 'x', byEnvironment: {} },
+  ], ENVS);
+  assert.equal(merged.variables[0].value, 'original');
+  assert.deepEqual(merged.variables[1].byEnvironment, { 'env-int': 'int' });
+  assert.equal(merged.variables.length, 2);
+  assert.equal(merged.skipped.length, 5);
+  assert.ok(merged.skipped.some((message) => message.includes('already exists')));
+  assert.ok(merged.skipped.some((message) => message.includes('unavailable environments')));
+  assert.ok(merged.skipped.some((message) => message.includes('invalid name')));
+});

@@ -101,7 +101,7 @@ test('the writing instructions come from the user, and the no-invention rule is 
   const custom = doc.describePrompt(op(), 'Write one sentence in plain English.').system;
   assert.match(custom, /Write one sentence in plain English\./);
   assert.ok(custom.includes(doc.RULES), 'the rule is kept even when the user edits the text');
-  assert.ok(custom.includes('{"description": "..."}'), 'the reply format is kept');
+  assert.ok(custom.includes('"summary"') && custom.includes('"description"'), 'the reply format is kept');
   assert.equal(doc.describePrompt(op(), '   ').system.startsWith(doc.DEFAULT_INSTRUCTIONS), true, 'blank text uses the default');
 });
 
@@ -111,6 +111,33 @@ test('the version and a real summary reach the model, and the method name is not
   assert.match(p.user, /Version: v3/);
   assert.doesNotMatch(p.user, /Doc comment/);
   assert.match(doc.templateDescription(o), /^GET \/sample\/v1\/items\/\{itemId\}/);
+});
+
+test('external prompts share the documentation rules and specify an importable snapshot', () => {
+  const prompts = doc.externalPrompts('Use concise terminology.');
+  for (const prompt of [prompts.source, prompts.enrich]) {
+    assert.match(prompt, /Use concise terminology/);
+    assert.ok(prompt.includes(doc.RULES));
+    assert.match(prompt, /HTTP method/);
+    assert.match(prompt, /complete valid JSON/);
+    assert.match(prompt, /customFieldDefinitions/);
+    assert.match(prompt, /customFields/);
+    assert.match(prompt, /at most 12 fields/);
+  }
+  const example = prompts.source.match(/\{"format":"api-explorer-snapshot".*\}/)[0];
+  const data = JSON.parse(example);
+  assert.equal(require('../lib/snapshotValidation').validateSnapshot(data), '');
+  assert.match(prompts.enrich, /Preserve.*IDs, method, path, version/);
+});
+
+test('generated summaries are saved, with a description fallback for older model replies', async () => {
+  const withSummary = await doc.runDocAgent({ operations: [op()], chat: async () => '{"summary":"Get an item by ID","description":"Returns one item by its identifier."}', source: 'local' });
+  assert.equal(withSummary.results[0].summary, 'Get an item by ID');
+  const older = await doc.runDocAgent({ operations: [op()], chat: async () => '{"description":"Returns one item by its identifier. It accepts a query."}', source: 'local' });
+  assert.equal(older.results[0].summary, 'Returns one item by its identifier.');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'docs-summary-'));
+  const saved = doc.merge(path.join(dir, 'docs.json'), withSummary.results);
+  assert.equal(saved['rev-1'].summary, 'Get an item by ID');
 });
 
 test('a model answer with a sentence or a code fence around the JSON is still used', () => {
