@@ -25,7 +25,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
-      - run: npm run dist:win
+      - name: Build unsigned Windows installer
+        run: npm run dist:win
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
       - uses: actions/upload-artifact@v4
         with:
           name: windows-installer
@@ -46,7 +49,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
-      - run: npm run dist:mac -- --${{ matrix.arch }}
+      - name: Build unsigned macOS installer
+        run: npm run dist:mac -- --${{ matrix.arch }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
       - uses: actions/upload-artifact@v4
         with:
           name: macos-${{ matrix.arch }}-installer

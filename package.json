@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit",
     "start": "npm run build && electron .",
     "dist:mac": "npm run build && electron-builder --mac --publish never",
-    "dist:mac-signed": "npm run build && electron-builder --mac",
+    "dist:mac-signed": "npm run build && electron-builder --mac --config.mac.notarize=true",
     "dist:win": "npm run build && electron-builder --win --publish never",
     "test": "node --test test/*.test.js"
   },
@@ -31,7 +31,7 @@
   "build": {
     "appId": "com.apiexplorer.desktop",
     "productName": "Reqzen",
-    "forceCodeSigning": true,
+    "forceCodeSigning": false,
     "files": [
       "main.js",
       "preload.js",
@@ -59,7 +59,7 @@
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
-      "notarize": true
+      "notarize": false
     },
     "dmg": {
       "title": "Reqzen ${version}"
