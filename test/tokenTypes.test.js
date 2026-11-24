@@ -89,3 +89,20 @@ test('a Basic credential stays out of a workspace file unless token values are i
   const rows = tt.exportRows(list, {}, {});
   assert.equal(tt.parseWorkspace(JSON.stringify(tt.exportWorkspace({ favourites: [], collections: [] }, rows, false))).tokenRows[0].auth, 'basic');
 });
+
+test('snapshot token imports report invalid rows and retain conflicting local types', () => {
+  const existing = [{ id: 'existing', name: 'Client', mode: 'request', url: 'https://auth.example/original', method: 'POST' }];
+  const merged = tt.mergeRows(existing, [
+    { name: 'client', mode: 'request', url: 'https://auth.example/replacement' },
+    { name: 'Broken', mode: 'request', url: '' },
+    { name: 'Bad URL', mode: 'request', url: 'not a URL' },
+    { name: 'New', mode: 'request', url: 'https://auth.example/new' },
+    { name: 'Needs credential', mode: 'request', url: 'https://auth.example/secure', auth: 'basic' },
+  ], {});
+  assert.equal(merged.types[0].url, 'https://auth.example/original');
+  assert.equal(merged.types[1].name, 'New');
+  assert.equal(merged.types[2].name, 'Needs credential');
+  assert.equal(merged.skipped.length, 3);
+  assert.match(merged.skipped[0], /already set up/);
+  assert.match(merged.skipped[1], /invalid/);
+});

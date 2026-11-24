@@ -13,7 +13,7 @@ test('an API needs a description when it has none in the spec and none saved, or
 });
 
 test('a run describes every API in chunks, saving each chunk and reporting progress', async () => {
-  const ops = Array.from({ length: 25 }, (_, i) => op(`r${i}`));
+  const ops = Array.from({ length: 65 }, (_, i) => op(`r${i}`));
   const saved = [];
   const seen = [];
   const status = await job.runDocumentation({
@@ -21,10 +21,10 @@ test('a run describes every API in chunks, saving each chunk and reporting progr
     save: (results) => saved.push(...results), onProgress: (s) => seen.push(s.done),
   });
   assert.equal(status.state, 'done');
-  assert.equal(status.done, 25);
-  assert.equal(status.fromModel, 25);
-  assert.equal(saved.length, 25);
-  assert.deepEqual(seen.slice(-1), [25]);
+  assert.equal(status.done, 65);
+  assert.equal(status.fromModel, 65);
+  assert.equal(saved.length, 65);
+  assert.deepEqual(seen.slice(-1), [65]);
 });
 
 test('a stop request keeps the chunks already saved', async () => {

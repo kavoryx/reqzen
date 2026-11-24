@@ -18,6 +18,8 @@ const gitClone = require('./lib/gitClone');
 const localScan = require('./lib/localScan');
 const projectFinder = require('./lib/projectFinder');
 const catalogExport = require('./lib/catalogExport');
+const { validateSnapshot } = require('./lib/snapshotValidation');
+const customFields = require('./lib/customFields');
 const ollama = require('./lib/ollama');
 const openaiCompatible = require('./lib/openaiCompatible');
 const assist = require('./lib/assist');
@@ -135,8 +137,9 @@ function rememberWorkspaceSnapshot(name, text) {
 function activateWorkspaceSnapshot(id) {
   const item = readWorkspaceSnapshots().find((row) => row.id === id);
   if (!item) return null;
-  const parsed = withKnownEnvironments(safeParse(item.text));
+  let parsed = withKnownEnvironments(safeParse(item.text));
   if (!parsed) return null;
+  if (item.customMetadata) parsed = customFields.applyMetadata(parsed, item.customMetadata.definitions, item.customMetadata.values);
   openSnapshot = parsed;
   activeSnapshotId = item.id;
   rememberEnvironments(parsed);
@@ -229,15 +232,15 @@ function createWindow() {
       sandbox: true,
     },
   });
-  const loadUi = async (mode) => {
-    const file = path.join(__dirname, 'app', mode === 'classic' ? 'classic' : 'renderer', 'index.html');
+  const loadUi = async () => {
+    const file = path.join(__dirname, 'app', 'renderer', 'index.html');
     try {
       await win.loadFile(file);
     } catch (error) {
       dialog.showErrorBox('Reqzen could not open this workspace', error instanceof Error ? error.message : 'The UI file could not be loaded.');
     }
   };
-  void loadUi('renderer');
+  void loadUi();
 
   // Find in page: Cmd+F (Ctrl+F elsewhere) opens the find bar in the page. Edit roles keep copy and paste working.
   const sendToPage = (channel, ...args) => { if (!win.isDestroyed()) win.webContents.send(channel, ...args); };
@@ -305,9 +308,6 @@ function createWindow() {
     {
       label: 'View',
       submenu: [
-        { label: 'Modern workspace', accelerator: 'CmdOrCtrl+Shift+R', click: () => { void loadUi('renderer'); } },
-        { label: 'Classic workspace', click: () => { void loadUi('classic'); } },
-        { type: 'separator' },
         { role: 'reload' }, { role: 'forceReload' }, { role: 'toggleDevTools' },
         { type: 'separator' },
         { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { role: 'togglefullscreen' },
@@ -334,6 +334,16 @@ ipcMain.handle('find:run', (event, input) => {
 ipcMain.handle('window:close', (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   if (win && !win.isDestroyed()) win.close();
+});
+
+ipcMain.handle('window:text-scale', (event, scale) => {
+  if (!Number.isInteger(scale) || scale < 80 || scale > 150 || scale % 10 !== 0) {
+    return { ok: false, problem: 'Choose a text size between 80% and 150%.' };
+  }
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win || win.isDestroyed()) return { ok: false, problem: 'The window is unavailable.' };
+  win.webContents.setZoomFactor(scale / 100);
+  return { ok: true };
 });
 
 ipcMain.handle('window:appearance', (event, mode) => {
@@ -382,7 +392,17 @@ function importSnapshotTokenTypes(snapshot) {
   if (!snapshot || !Array.isArray(snapshot.tokenTypes) || snapshot.tokenTypes.length === 0 || !tokenSourcesFile) return null;
   const envIdByName = Object.fromEntries((snapshot.environments || []).map((e) => [String(e.name).toLowerCase(), e.environmentId]));
   const merged = tokenTypes.mergeRows(savedTokenTypes(), snapshot.tokenTypes, envIdByName);
-  return tokenTypes.save(tokenSourcesFile, merged.types);
+  return { types: tokenTypes.save(tokenSourcesFile, merged.types), skipped: merged.skipped };
+}
+
+function importSnapshotVariables(snapshot) {
+  if (!snapshot || !Array.isArray(snapshot.variables) || snapshot.variables.length === 0 || !variablesFile) return null;
+  const available = new Set(currentView().environments.map((env) => env.environmentId));
+  const envIds = (snapshot.environments || []).map((env) => env.environmentId).filter((id) => available.has(id));
+  const merged = variables.mergeRows(savedVariables(), snapshot.variables, envIds);
+  aiRedaction.registerSensitiveValues(merged.variables);
+  variables.save(variablesFile, merged.variables);
+  return merged;
 }
 
 ipcMain.handle('snapshot:open', async (event, options) => {
@@ -401,20 +421,41 @@ ipcMain.handle('snapshot:open', async (event, options) => {
     throw new Error('The snapshot is larger than 50 MB.');
   }
   const text = fs.readFileSync(file, 'utf8');
-  openSnapshot = safeParse(text);
-  if (!openSnapshot || openSnapshot.format !== 'api-explorer-snapshot'
-    || !Array.isArray(openSnapshot.operations) || !Array.isArray(openSnapshot.services)) {
-    openSnapshot = null;
-    throw new Error('This file is not a supported Reqzen API snapshot.');
-  }
+  const parsed = safeParse(text);
+  const problem = validateSnapshot(parsed);
+  if (problem) throw new Error(problem);
+  openSnapshot = parsed;
   rememberEnvironments(openSnapshot);
   const types = options && options.compareOnly === true ? null : importSnapshotTokenTypes(openSnapshot);
+  const importedVariables = options && options.compareOnly === true ? null : importSnapshotVariables(openSnapshot);
   const name = path.basename(file);
   const workspaceItem = rememberWorkspaceSnapshot(name, text);
   if (workspaceItem) activeSnapshotId = workspaceItem.id;
+  if (workspaceItem && workspaceItem.customMetadata) {
+    openSnapshot = customFields.applyMetadata(openSnapshot, workspaceItem.customMetadata.definitions, workspaceItem.customMetadata.values);
+  }
   reconcileSavedLibrary(workspaceOperations());
-  saveLastSnapshot(name, text);
-  return { id: workspaceItem?.id || '', name, text, types };
+  const activeText = JSON.stringify(openSnapshot);
+  saveLastSnapshot(name, activeText);
+  return { id: workspaceItem?.id || '', name, text: activeText, types: types?.types || null,
+    skipped: [...(types?.skipped || []), ...(importedVariables?.skipped || [])] };
+});
+
+ipcMain.handle('snapshot:saveCustomFields', (_event, input) => {
+  if (!openSnapshot || !activeSnapshotId || !workspaceSnapshotsFile) return { ok: false, problem: 'Open a saved snapshot first.' };
+  try {
+    const updated = customFields.applyMetadata(openSnapshot, input && input.definitions, input && input.values);
+    const items = readWorkspaceSnapshots();
+    const item = items.find((entry) => entry.id === activeSnapshotId);
+    if (!item) return { ok: false, problem: 'The active snapshot is no longer available.' };
+    item.customMetadata = { definitions: updated.customFieldDefinitions, values: Object.fromEntries(updated.operations.map((operation) => [operation.operationId, operation.customFields])) };
+    saveWorkspaceSnapshots(items);
+    openSnapshot = updated;
+    saveLastSnapshot(item.name, JSON.stringify(updated));
+    return { ok: true, text: JSON.stringify(updated) };
+  } catch (error) {
+    return { ok: false, problem: error instanceof Error ? error.message : 'Custom fields could not be saved.' };
+  }
 });
 
 // The last snapshot is copied into the app's data folder, so startup can load it without asking again, even if the
@@ -593,7 +634,6 @@ ipcMain.handle('model:list', async () => {
 // kind 'manual' is the Documentation window's prompt; 'auto' is the prompt used after a scan.
 const docInstructions = (kind = 'manual') => docAgent.instructionsOrDefault(savedDocSettings()[kind === 'auto' ? 'afterScanInstructions' : 'instructions']);
 const generateAfterScanSaved = () => savedDocSettings().generateAfterScan !== false;
-const DOC_BATCH = 50;
 
 // The background run started after a scan. One run at a time; the page polls its status.
 let docJob = { state: 'idle' };
@@ -601,7 +641,7 @@ let docJobStop = false;
 
 const usableOperation = (o) => ({
   revisionId: o.revisionId, httpMethod: o.httpMethod, pathTemplate: o.pathTemplate, serviceName: o.serviceName,
-  summary: o.summary, contractVersion: o.contractVersion, lifecycleStatus: o.lifecycleStatus, definition: o.definition,
+  summary: o.summary, description: o.description, contractVersion: o.contractVersion, lifecycleStatus: o.lifecycleStatus, visibility: o.visibility, definition: o.definition,
 });
 
 function docChat() {
@@ -672,6 +712,7 @@ ipcMain.handle('docs:get', () => ({
   instructions: docInstructions('manual'),
   afterScanInstructions: docInstructions('auto'),
   defaultInstructions: docAgent.DEFAULT_INSTRUCTIONS,
+  externalPrompts: docAgent.externalPrompts(docInstructions('manual')),
   generateAfterScan: generateAfterScanSaved(),
   hasKey: activeApiKey() !== '',
   baseUrl: docProvider() === 'openai' ? openaiSettings().baseUrl : (docProvider() === 'local' ? savedDocSettings().baseUrl || 'http://127.0.0.1:11434' : ''),
@@ -735,11 +776,11 @@ ipcMain.handle('docs:jobStop', () => {
   return docJob;
 });
 
-// Writes descriptions for up to 50 APIs per call from the Documentation window. The page calls again for the rest.
+// Writes descriptions in background chunks from the Documentation window.
 ipcMain.handle('docs:generate', async (_event, input) => {
   if (!docsFile) return { ok: false, problem: 'The app is not ready yet.' };
   if (docJob.state === 'running') return { ok: false, problem: 'A run is already writing descriptions in the background. Stop it, or wait for it to finish.' };
-  const ops = Array.isArray(input && input.operations) ? input.operations.slice(0, DOC_BATCH) : [];
+  const ops = Array.isArray(input && input.operations) ? input.operations : [];
   const usable = ops.filter((o) => o && typeof o.revisionId === 'string' && o.definition).map(usableOperation);
   if (usable.length === 0) return { ok: false, problem: 'No APIs to describe.' };
   aiRedaction.registerSensitiveValues(usable);
@@ -1220,16 +1261,23 @@ ipcMain.handle('projects:findGitHub', async (_event, input) => {
   }
 });
 
-// Exports the open catalogue as JSON (the same format Open snapshot reads, with the descriptions and overviews written so
-// far) or as CSV for a spreadsheet. The file holds no tokens or request values.
+// Exports a catalogue as JSON or CSV. Sharing exports include request data or variable values only with explicit opt-in.
 ipcMain.handle('catalog:export', async (event, input) => {
   const format = input && input.format === 'csv' ? 'csv' : 'json';
   let catalog;
   try {
     const docs = docsFile ? docAgent.load(docsFile) : {};
     const overviews = docsFile ? docAgent.loadOverviews(docsFile) : {};
-    catalog = catalogExport.buildCatalog({
-      snapshot: input && input.snapshot,
+    catalog = input && input.share === true ? catalogExport.buildShareCatalog({
+      snapshot: openSnapshot,
+      environments: currentView().environments,
+      types: savedTokenTypes(),
+      savedVariables: savedVariables(),
+      selections: input,
+      docs,
+      overviews,
+    }) : catalogExport.buildCatalog({
+      snapshot: input && input.external === true ? openSnapshot : input && input.snapshot,
       docs,
       overviews,
       defaultEnvironmentId: input && typeof input.defaultEnvironmentId === 'string' ? input.defaultEnvironmentId : '',
@@ -1237,8 +1285,8 @@ ipcMain.handle('catalog:export', async (event, input) => {
       exportedBy: 'Reqzen',
       // Services, environments and token types are chosen in the export dialog. Token types never carry values.
       services: input && Array.isArray(input.services) ? input.services.filter((x) => typeof x === 'string') : null,
-      includeEnvironments: !(input && input.includeEnvironments === false),
-      tokenTypes: input && input.includeTokenTypes === true ? tokenTypes.exportRows(savedTokenTypes(), environmentNames(), null) : null,
+      includeEnvironments: !(input && (input.external === true || input.includeEnvironments === false)),
+      tokenTypes: input && input.external !== true && input.includeTokenTypes === true ? tokenTypes.exportRows(savedTokenTypes(), environmentNames(), null) : null,
     });
   } catch (e) {
     return { ok: false, problems: [e instanceof Error ? e.message : 'The catalogue could not be exported.'] };
@@ -1381,6 +1429,10 @@ async function runTokenCall(input) {
   aiRedaction.registerSensitiveValues(input);
   const view = currentView();
   const env = view.environments.find((e) => e.environmentId === (input && input.environmentId));
+  if (input && input.validateConfig === true) {
+    const checked = tokenFetch.validateTokenType({ ...input, mode: 'request' });
+    if (checked.problems.length > 0) return { ok: false, stage: 'check', problems: checked.problems };
+  }
   // Headers come either as a record (from an API the snapshot knows) or as "Name: value" lines (from a token address).
   const headerRecord = typeof (input && input.headers) === 'string'
     ? Object.fromEntries(tokenFetch.parseHeaderLines(input.headers).headers.map((h) => [h.name, h.value]))

@@ -2,10 +2,11 @@ export type Platform = 'mac' | 'win' | 'linux';
 
 export interface DesktopBridge {
   platform: Platform;
-  openSnapshot: (options?: { compareOnly?: boolean }) => Promise<{ id: string; name: string; text: string } | null>;
+  openSnapshot: (options?: { compareOnly?: boolean }) => Promise<{ id: string; name: string; text: string; skipped?: string[] } | null>;
   listSnapshots: () => Promise<unknown>;
   selectSnapshot: (id: string) => Promise<unknown>;
   removeSnapshot: (id?: string) => Promise<unknown>;
+  saveSnapshotCustomFields: (input: Record<string, unknown>) => Promise<unknown>;
   lastSnapshot: () => Promise<{ id: string; name: string; text: string } | null>;
   runRequest: (run: Record<string, unknown>) => Promise<unknown>;
   listEnvironments: () => Promise<unknown>;
@@ -20,6 +21,7 @@ export interface DesktopBridge {
   saveLibrary: (library: unknown) => Promise<unknown>;
   exportCollection: (input: Record<string, unknown>) => Promise<unknown>;
   importCollection: () => Promise<unknown>;
+  exportCatalog: (input: Record<string, unknown>) => Promise<unknown>;
   listCustomRequests: () => Promise<unknown>;
   saveCustomRequest: (input: Record<string, unknown>) => Promise<unknown>;
   deleteCustomRequest: (id: string) => Promise<unknown>;
@@ -53,6 +55,7 @@ export interface DesktopBridge {
   onCloseRequest: (callback: () => void) => () => void;
   closeWindow: () => Promise<void>;
   setWindowAppearance: (mode: 'system' | 'light' | 'dark') => Promise<unknown>;
+  setTextScale: (scale: number) => Promise<unknown>;
   findInPage: (input: Record<string, unknown>) => Promise<void>;
   stopFind: () => Promise<void>;
 }

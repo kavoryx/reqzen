@@ -5,6 +5,8 @@ import {
   record,
   type Platform,
 } from './bridge';
+import { parseTokenCurl, tokenCurl, type TokenCurlConfig } from './tokenCurl.mjs';
+import { combinedSearchScore, rankApiSearch, scoreApiSearch } from './apiSearch.mjs';
 
 type View = 'home' | 'catalog' | 'collections' | 'settings';
 type SettingsSection = 'appearance' | 'environments' | 'variables' | 'tokens' | 'ai' | 'documentation' | 'scan-rules' | 'privacy';
@@ -31,6 +33,13 @@ interface Operation {
   schemaComplete?: boolean;
   definition?: Record<string, unknown>;
   parameters?: ApiParameter[];
+  customFields?: Record<string, string>;
+}
+
+interface CustomFieldDefinition {
+  key: string;
+  label: string;
+  visible: boolean;
 }
 
 interface Service {
@@ -55,6 +64,7 @@ interface Snapshot {
   operations: Operation[];
   environments: Environment[];
   serviceOverrides?: Array<Record<string, unknown>>;
+  customFieldDefinitions: CustomFieldDefinition[];
 }
 
 interface Variable {
@@ -85,6 +95,7 @@ interface Preferences {
   palette: 'blue' | 'teal' | 'violet' | 'amber' | 'graphite';
   wrapText: boolean;
   columnWidths: number[] | null;
+  textScale: number;
 }
 
 interface WorkspaceSnapshot {
@@ -130,6 +141,7 @@ const defaultPreferences: Preferences = {
   palette: 'blue',
   wrapText: false,
   columnWidths: null,
+  textScale: 100,
 };
 
 const methods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
@@ -164,6 +176,7 @@ function parseSnapshot(text: string): Snapshot {
     operations,
     environments: arrayOf<Environment>(data.environments),
     serviceOverrides: arrayOf<Record<string, unknown>>(data.serviceOverrides),
+    customFieldDefinitions: arrayOf<CustomFieldDefinition>(data.customFieldDefinitions),
   };
 }
 
@@ -337,6 +350,249 @@ function Dialog({
   );
 }
 
+function TokenTypeDialog({
+  initial, environments, defaultEnvironmentId, tokensByEnvironment, onSave, onClose,
+}: {
+  initial: TokenType;
+  environments: Environment[];
+  defaultEnvironmentId: string;
+  tokensByEnvironment: Record<string, string>;
+  onSave: (config: TokenCurlConfig & { name: string; tokenField: string }) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [draft, setDraft] = useState<TokenCurlConfig & { name: string; tokenField: string }>({
+    name: initial.name,
+    url: initial.url || '',
+    method: initial.method || 'POST',
+    headers: initial.headers || '',
+    body: initial.body || '',
+    contentType: initial.contentType || 'json',
+    auth: initial.auth || 'none',
+    basic: initial.basic || '',
+    tokenField: initial.tokenField || 'access_token',
+  });
+  const [curl, setCurl] = useState('');
+  const [copiedCurl, setCopiedCurl] = useState('');
+  const [message, setMessage] = useState('');
+  const [messageError, setMessageError] = useState(false);
+  const [environmentId, setEnvironmentId] = useState(defaultEnvironmentId);
+  const [confirmed, setConfirmed] = useState(false);
+  const [convertLegacy, setConvertLegacy] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const environment = environments.find((item) => (item.environmentId || item.id) === environmentId);
+  const update = (patch: Partial<typeof draft>) => {
+    setDraft((current) => ({ ...current, ...patch }));
+    setConfirmed(false);
+    setCopiedCurl('');
+    setMessage('');
+  };
+  const importCurl = () => {
+    try {
+      const { droppedBearer, ...parsed } = parseTokenCurl(curl);
+      update(parsed);
+      setMessageError(false);
+      setMessage(droppedBearer
+        ? 'Imported. The Bearer value was not saved; the selected environment’s access token will be used.'
+        : 'Imported. Review the request before saving or testing.');
+    } catch (error) {
+      setMessageError(true);
+      setMessage(errorMessage(error));
+    }
+  };
+  const copyCurl = async () => {
+    const command = tokenCurl(draft);
+    setCopiedCurl(command);
+    try {
+      await navigator.clipboard.writeText(command);
+      setMessageError(false);
+      setMessage('Curl copied. It may contain credentials or other sensitive values; keep it private.');
+    } catch {
+      setMessageError(true);
+      setMessage('Could not copy automatically. Select and copy the command below.');
+    }
+  };
+  const testRequest = async () => {
+    if (!environment || !confirmed) return;
+    setBusy(true);
+    setMessage('');
+    try {
+      const result = record(await window.desktop.fetchToken({
+        ...draft,
+        environmentId: environment.environmentId || environment.id,
+        bearer: tokensByEnvironment[environment.environmentId || environment.id || ''] || '',
+        confirmWrite: confirmed,
+        acceptIncomplete: false,
+        validateConfig: true,
+      }));
+      const problem = resultError(result);
+      if (problem) throw new Error(problem);
+      if (result.ok !== true || typeof result.token !== 'string') throw new Error('The token response did not contain an access token.');
+      setMessageError(false);
+      setMessage(`Token found (${result.token.length} characters, HTTP ${String(result.status)}). The token was not shown or saved.`);
+    } catch (error) {
+      setMessageError(true);
+      setMessage(`Test failed: ${errorMessage(error)}`);
+    } finally {
+      setBusy(false);
+      setConfirmed(false);
+    }
+  };
+  return (
+    <Dialog title={initial.id ? 'Edit token type' : 'Add token type'} detail="Configure a token request manually or import a curl command." onClose={onClose} className="wide-dialog">
+        <form className="dialog-form" onSubmit={(event) => { event.preventDefault(); if (initial.mode !== 'api' || convertLegacy) void onSave(draft); }}>
+          <fieldset className="token-editor-fields" disabled={busy}>
+            {initial.mode === 'api' && <label className="check-row"><input type="checkbox" checked={convertLegacy} onChange={(event) => setConvertLegacy(event.target.checked)} /><span><strong>Convert this catalog-based token type to a token endpoint</strong><small>Saving replaces its catalog API configuration with the request below.</small></span></label>}
+            <Field label="Token type name"><input required value={draft.name} onChange={(event) => update({ name: event.target.value })} placeholder="Support token" /></Field>
+            <div className="token-curl-panel">
+              <Field label="Import from curl" hint="Paste a command to fill the request. It is parsed locally and never executed.">
+                <textarea className="code-editor" rows={3} value={curl} onChange={(event) => setCurl(event.target.value)} placeholder="curl -X POST 'https://auth.example.com/token' -u 'client:secret' -d 'grant_type=client_credentials'" />
+              </Field>
+              <Button type="button" disabled={!curl.trim()} onClick={importCurl}>Fill from curl</Button>
+            </div>
+            <div className="form-grid">
+              <Field label="Method"><select value={draft.method} onChange={(event) => update({ method: event.target.value })}>{methods.filter((method) => !['HEAD', 'OPTIONS'].includes(method)).map((method) => <option key={method}>{method}</option>)}</select></Field>
+              <Field label="Token endpoint"><input required value={draft.url} onChange={(event) => update({ url: event.target.value })} placeholder="https://auth.example.com/oauth/token" /></Field>
+            </div>
+            <div className="form-grid">
+              <Field label="Content type"><select value={draft.contentType} onChange={(event) => update({ contentType: event.target.value === 'form' ? 'form' : 'json' })}><option value="json">JSON</option><option value="form">Form</option></select></Field>
+              <Field label="Access token field"><input value={draft.tokenField} onChange={(event) => update({ tokenField: event.target.value })} /></Field>
+            </div>
+            <Field label="Request headers"><textarea rows={3} value={draft.headers} onChange={(event) => update({ headers: event.target.value })} placeholder="Accept: application/json" /></Field>
+            <Field label="Request body" hint="Headers, body and Basic credentials are stored locally with the token type."><textarea rows={5} value={draft.body} onChange={(event) => update({ body: event.target.value })} placeholder='{"client":"reqzen"}' /></Field>
+            <Field label="Send access token with this token call"><select value={draft.auth} onChange={(event) => update({ auth: event.target.value === 'basic' ? 'basic' : event.target.value === 'bearer' ? 'bearer' : 'none' })}><option value="none">None</option><option value="bearer">Bearer token from selected environment</option><option value="basic">Basic authentication</option></select></Field>
+            {draft.auth === 'basic' && <Field label="Basic credential" hint="Authorization value in the form Basic followed by the base64-encoded client ID and secret."><input type="password" autoComplete="off" value={draft.basic} onChange={(event) => update({ basic: event.target.value })} placeholder="Basic …" /></Field>}
+            <div className="token-curl-panel">
+              <strong>Test token request</strong>
+              <p>Sends this unsaved request once. The result will not replace your access token.</p>
+              <Field label="Test environment"><select value={environmentId} onChange={(event) => { setEnvironmentId(event.target.value); setConfirmed(false); setMessage(''); }}><option value="">Choose an environment</option>{environments.filter((item) => item.enabled !== false).map((item) => <option key={item.environmentId || item.id} value={item.environmentId || item.id}>{item.name}{item.production ? ' · Production' : ''}</option>)}</select></Field>
+              <label className="check-row"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span><strong>I confirm sending this request{environment?.production ? ' to a production environment' : ''}.</strong></span></label>
+              <div className="token-editor-actions"><Button type="button" disabled={!environmentId || !draft.url.trim() || !confirmed} onClick={() => { void testRequest(); }}>Test token request</Button><Button type="button" disabled={!draft.url.trim()} onClick={() => { void copyCurl(); }}>Copy curl</Button></div>
+              {copiedCurl && <Field label="Curl command" hint="This command may contain secrets."><textarea className="code-editor" readOnly rows={4} value={copiedCurl} onFocus={(event) => event.currentTarget.select()} /></Field>}
+            </div>
+          </fieldset>
+          {busy && <p role="status">Testing token request…</p>}
+          {message && <p role="status" className={messageError ? 'field-error' : 'token-test-success'}>{message}</p>}
+          <div className="dialog-actions"><Button type="button" onClick={onClose}>Cancel</Button><Button variant="primary" type="submit" disabled={busy || (initial.mode === 'api' && !convertLegacy)}>Save token type</Button></div>
+        </form>
+    </Dialog>
+  );
+}
+
+function ShareSnapshotDialog({ services, environments, tokenTypes, variables, defaultEnvironmentId, onExport, onClose }: {
+  services: Service[];
+  environments: Environment[];
+  tokenTypes: TokenType[];
+  variables: Variable[];
+  defaultEnvironmentId: string;
+  onExport: (selection: Record<string, unknown>) => Promise<boolean>;
+  onClose: () => void;
+}) {
+  const [serviceIds, setServiceIds] = useState(services.map((item) => item.serviceId));
+  const [environmentIds, setEnvironmentIds] = useState<string[]>([]);
+  const [typeIds, setTypeIds] = useState<string[]>([]);
+  const [variableIds, setVariableIds] = useState<string[]>([]);
+  const [includeVariableValues, setIncludeVariableValues] = useState(false);
+  const [includeTokenSecrets, setIncludeTokenSecrets] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const toggle = (id: string, values: string[], set: (ids: string[]) => void) =>
+    set(values.includes(id) ? values.filter((value) => value !== id) : [...values, id]);
+  const group = (title: string, items: Array<{ id: string; label: string }>, selected: string[], set: (ids: string[]) => void, disabled = false) => (
+    <fieldset className="share-group" disabled={disabled}>
+      <legend>{title}</legend>
+      {items.length > 0 ? <>
+        <div className="share-select-actions"><button type="button" className="text-button" onClick={() => set(items.map((item) => item.id))}>Select all</button><button type="button" className="text-button" onClick={() => set([])}>Clear</button></div>
+        <div className="share-items">{items.map((item) => <label key={item.id}><input type="checkbox" checked={selected.includes(item.id)} onChange={() => toggle(item.id, selected, set)} /> {item.label}</label>)}</div>
+      </> : <small>None available.</small>}
+    </fieldset>
+  );
+  return (
+    <Dialog title="Export snapshot" detail="Choose what to share. Nothing is sent to another service by Reqzen." onClose={onClose} className="wide-dialog">
+      <form className="dialog-form" onSubmit={(event) => {
+        event.preventDefault();
+        setBusy(true);
+        void onExport({ share: true, format: 'json', services: serviceIds, environments: environmentIds, tokenTypes: typeIds, variables: variableIds, defaultEnvironmentId, includeVariableValues, includeTokenSecrets })
+          .then((ok) => { if (ok) onClose(); })
+          .finally(() => setBusy(false));
+      }}>
+        {group('Services and APIs', services.map((item) => ({ id: item.serviceId, label: item.name })), serviceIds, setServiceIds)}
+        {group('Environments', environments.map((item) => ({ id: item.environmentId || item.id || '', label: `${item.name}${item.production ? ' · Production' : ''}` })).filter((item) => item.id), environmentIds, setEnvironmentIds)}
+        {group('Token types', tokenTypes.map((item) => ({ id: item.id, label: item.name })), typeIds, setTypeIds)}
+        {tokenTypes.some((item) => typeIds.includes(item.id) && item.mode === 'api') && <p className="privacy-note">API-based token types can be shared, but must be reconfigured as token requests to generate tokens in this workspace.</p>}
+        <label className="check-row"><input type="checkbox" checked={includeTokenSecrets} onChange={(event) => setIncludeTokenSecrets(event.target.checked)} /><span><strong>Include token request credentials and data</strong><small>Includes Basic credentials, URL credentials and query, headers and request bodies. Without this, those parts are removed and recipients may need to reconfigure the request.</small></span></label>
+        <label className="check-row"><input type="checkbox" checked={includeVariableValues} onChange={(event) => { setIncludeVariableValues(event.target.checked); if (!event.target.checked) setVariableIds([]); }} /><span><strong>Include variable values</strong><small>Variable values may contain secrets. Environment-specific values are exported only for selected environments.</small></span></label>
+        {group('Variables', variables.map((item) => ({ id: item.id, label: item.name })), variableIds, setVariableIds, !includeVariableValues)}
+        <p className="privacy-note">Snapshots may contain sensitive API details and environment addresses. Review the file before sharing. Session access tokens are never included.</p>
+        <div className="dialog-actions"><Button type="button" onClick={onClose} disabled={busy}>Cancel</Button><Button variant="primary" type="submit" disabled={busy || serviceIds.length === 0}>{busy ? 'Exporting…' : 'Export snapshot'}</Button></div>
+      </form>
+    </Dialog>
+  );
+}
+
+function CustomFieldDialog({ initial, onSave, onClose }: {
+  initial: CustomFieldDefinition[];
+  onSave: (definitions: CustomFieldDefinition[]) => Promise<boolean>;
+  onClose: () => void;
+}) {
+  const [fields, setFields] = useState(initial);
+  const [key, setKey] = useState('');
+  const [label, setLabel] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const add = () => {
+    const name = key.trim();
+    const title = label.trim();
+    if (!/^[A-Za-z][A-Za-z0-9_-]{0,39}$/.test(name) || Object.prototype.hasOwnProperty.call(Object.prototype, name) || !title || title.length > 60) {
+      setError('Use a key starting with a letter (letters, digits, _ or -, up to 40 characters) and a label up to 60 characters.');
+      return;
+    }
+    if (fields.some((field) => field.key.toLowerCase() === name.toLowerCase())) {
+      setError('That field key already exists.');
+      return;
+    }
+    setFields([...fields, { key: name, label: title, visible: true }]);
+    setKey('');
+    setLabel('');
+    setError('');
+  };
+  return (
+    <Dialog title="Configure API fields" detail="Add fields to the snapshot and choose which appear as catalog columns." onClose={onClose} className="wide-dialog">
+      <div className="custom-fields-list">{fields.map((field, index) => (
+        <div className="custom-field-row" key={field.key}>
+          <div><label>Label <input aria-label={`Label for ${field.key}`} maxLength={60} value={field.label} onChange={(event) => setFields(fields.map((entry, i) => i === index ? { ...entry, label: event.target.value } : entry))} /></label><small>{field.key}</small></div>
+          <label><input type="checkbox" checked={field.visible} onChange={(event) => setFields(fields.map((entry, i) => i === index ? { ...entry, visible: event.target.checked } : entry))} /> Show column</label>
+          <Button type="button" onClick={() => setFields(fields.filter((entry) => entry.key !== field.key))}>Remove</Button>
+        </div>
+      ))}</div>
+      <p className="privacy-note">Removing a field and saving also removes its values from every API. Custom fields are included in exported snapshots.</p>
+      <div className="form-grid">
+        <Field label="Field key"><input value={key} onChange={(event) => setKey(event.target.value)} placeholder="owner" /></Field>
+        <Field label="Field label"><input value={label} onChange={(event) => setLabel(event.target.value)} placeholder="Team owner" /></Field>
+      </div>
+      {error && <p className="field-error" role="alert">{error}</p>}
+      <Button type="button" disabled={fields.length >= 12} onClick={add}>Add field</Button>
+      <div className="dialog-actions"><Button type="button" onClick={onClose} disabled={busy}>Cancel</Button><Button type="button" variant="primary" disabled={busy} onClick={() => {
+        setBusy(true);
+        void onSave(fields).then((ok) => { if (ok) onClose(); }).finally(() => setBusy(false));
+      }}>Save fields</Button></div>
+    </Dialog>
+  );
+}
+
+function OperationCustomFields({ operation, definitions, onSave }: {
+  operation: Operation;
+  definitions: CustomFieldDefinition[];
+  onSave: (values: Record<string, string>) => Promise<boolean>;
+}) {
+  const [values, setValues] = useState<Record<string, string>>(operation.customFields || {});
+  const [busy, setBusy] = useState(false);
+  if (!definitions.length) return null;
+  return <div className="token-generator">
+    <div className="token-generator-head"><strong>Custom API fields</strong><small>Saved with this snapshot and included when shared. Do not enter secrets.</small></div>
+    {definitions.map((field) => <Field key={field.key} label={field.label}><input maxLength={1000} value={values[field.key] || ''} onChange={(event) => setValues({ ...values, [field.key]: event.target.value })} /></Field>)}
+    <Button type="button" disabled={busy} onClick={() => { setBusy(true); void onSave(values).finally(() => setBusy(false)); }}>{busy ? 'Saving…' : 'Save API fields'}</Button>
+  </div>;
+}
+
 function App() {
   const desktop = window.desktop;
   const platform: Platform = desktop.platform;
@@ -361,6 +617,7 @@ function App() {
   const [aiAvailable, setAiAvailable] = useState(false);
   const [selectedService, setSelectedService] = useState('');
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [noticePaused, setNoticePaused] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
@@ -421,6 +678,8 @@ function App() {
   const [docsSettings, setDocsSettings] = useState<Record<string, unknown>>({});
   const [tokenTypes, setTokenTypes] = useState<TokenType[]>([]);
   const [tokenEditor, setTokenEditor] = useState<TokenType | null>(null);
+  const [shareSnapshotOpen, setShareSnapshotOpen] = useState(false);
+  const [customFieldEditorOpen, setCustomFieldEditorOpen] = useState(false);
   const [scanRulesText, setScanRulesText] = useState('');
   const [aiStatus, setAiStatus] = useState('');
   const [aiKey, setAiKey] = useState('');
@@ -440,10 +699,35 @@ function App() {
   const commandRef = useRef<HTMLInputElement>(null);
   const requestSendRef = useRef<(() => void) | null>(null);
   const overflowRef = useRef<HTMLDivElement>(null);
+  const aiSearchSequence = useRef(0);
+  const latestSearch = useRef(search);
+  const latestSnapshot = useRef(snapshot);
+  latestSearch.current = search;
+  latestSnapshot.current = snapshot;
 
   const notify = useCallback((message: string, severity: Severity = 'info') => {
+    setNoticePaused(false);
     setNotice({ message, severity });
   }, []);
+
+  useEffect(() => {
+    if (!notice || noticePaused) return;
+    const duration = Math.max(notice.severity === 'error' ? 12000 : 6000, Math.min(30000, notice.message.length * 80));
+    const timer = window.setTimeout(() => setNotice(null), duration);
+    return () => window.clearTimeout(timer);
+  }, [notice, noticePaused]);
+
+  useEffect(() => {
+    if (!docProgressVisible || docJob.state === 'running') return;
+    const timer = window.setTimeout(() => setDocProgressVisible(false), docJob.state === 'failed' ? 12000 : 6000);
+    return () => window.clearTimeout(timer);
+  }, [docProgressVisible, docJob.state]);
+
+  useEffect(() => {
+    if (!globalTokenStatus || globalTokenBusy) return;
+    const timer = window.setTimeout(() => setGlobalTokenStatus(''), 12000);
+    return () => window.clearTimeout(timer);
+  }, [globalTokenStatus, globalTokenBusy]);
 
   const applySnapshot = useCallback((text: string, name: string, id = '') => {
     const parsed = parseSnapshot(text);
@@ -530,7 +814,12 @@ function App() {
           && saved.columnWidths.every((width) => typeof width === 'number' && Number.isInteger(width) && width >= 60 && width <= 1200)
           ? saved.columnWidths as number[]
           : null;
-        setPreferences({ mode, palette, wrapText: saved.wrapText === true, columnWidths });
+        const textScale = typeof saved.textScale === 'number' && Number.isInteger(saved.textScale) && saved.textScale >= 80 && saved.textScale <= 150 && saved.textScale % 10 === 0 ? saved.textScale : 100;
+        setPreferences({ mode, palette, wrapText: saved.wrapText === true, columnWidths, textScale });
+        void desktop.setTextScale(textScale).then((result) => {
+          const problem = resultError(result);
+          if (problem) throw new Error(problem);
+        }).catch((error: unknown) => notify(`Could not apply text size: ${errorMessage(error)}`, 'error'));
         const workspace = record(workspaceResult);
         setWorkspaceSnapshots(arrayOf<WorkspaceSnapshot>(workspace.snapshots));
         setActiveSnapshotId(String(workspace.activeId || lastSnapshot?.id || ''));
@@ -581,7 +870,7 @@ function App() {
         if (!active) return;
         const nextJob = record(job);
         setDocJob(nextJob);
-        if (nextJob.state === 'running') setDocProgressVisible(true);
+        if (nextJob.state === 'running' && docJob.state !== 'running') setDocProgressVisible(true);
         if (nextJob.state !== 'running') {
           const docs = record(await desktop.getDocs());
           if (active) setDocsSettings(docs);
@@ -650,7 +939,8 @@ function App() {
         void desktop.openSnapshot().then((opened) => {
           if (opened) {
             applySnapshot(opened.text, opened.name, opened.id);
-            notify(`Opened ${opened.name}.`, 'success');
+            const skipped = opened.skipped || [];
+            notify(skipped.length ? `Opened ${opened.name}. Skipped imports: ${skipped.join(' ')}` : `Opened ${opened.name}.`, skipped.length ? 'info' : 'success');
             void refreshWorkspaceSnapshots();
           }
         }).catch((error: unknown) => notify(`The snapshot could not be opened: ${errorMessage(error)}`, 'error'));
@@ -701,45 +991,65 @@ function App() {
   const setToken = useCallback((value: string) => {
     setTokensByEnvironment((current) => ({ ...current, [tokenEnvironmentKey]: value }));
   }, [tokenEnvironmentKey]);
-  const searchCandidates = useMemo(() => (snapshot?.operations || []).map((operation) => ({
+  const documentedOperations = useMemo(() => {
+    const generatedDocs = record(docsSettings.docs);
+    return (snapshot?.operations || []).map((operation) => {
+      const generated = record(operation.revisionId ? generatedDocs[operation.revisionId] : undefined);
+      const description = typeof generated.description === 'string' ? generated.description : '';
+      const summary = typeof generated.summary === 'string' ? generated.summary : '';
+      return {
+        ...operation,
+        description: operation.description || description,
+        summary: operation.summary || summary,
+      };
+    });
+  }, [docsSettings.docs, snapshot]);
+  const searchCandidates = useMemo(() => documentedOperations.map((operation) => ({
     id: operation.operationId,
     method: operation.httpMethod,
     path: operation.pathTemplate,
     summary: operation.summary || '',
+    description: operation.description || '',
     service: operation.serviceName,
-  })), [snapshot]);
+    version: operation.contractVersion || '',
+    metadata: (snapshot?.customFieldDefinitions || []).map((field) => {
+      const value = operation.customFields?.[field.key];
+      return value ? `${field.label} ${value}` : '';
+    }).join(' '),
+  })), [documentedOperations, snapshot?.customFieldDefinitions]);
 
   const runAiSearch = useCallback(async (question = search) => {
     const normalized = question.trim();
     if (!normalized || !snapshot) return;
+    const sequence = ++aiSearchSequence.current;
     setAiSearchBusy(true);
     setAiSearchMessage('');
     try {
-      const terms = normalized.toLowerCase().split(/\s+/).filter((term) => term.length > 1);
-      const candidates = [...searchCandidates].sort((left, right) => {
-        const score = (candidate: typeof searchCandidates[number]) => {
-          const text = `${candidate.method} ${candidate.path} ${candidate.summary} ${candidate.service}`.toLowerCase();
-          return terms.reduce((total, term) => total + (text.includes(term) ? 1 : 0), 0);
-        };
-        return score(right) - score(left);
-      }).slice(0, 40);
+      const ranked = rankApiSearch(normalized, searchCandidates).map((entry) => entry.candidate);
+      const rankedIds = new Set(ranked.map((candidate) => candidate.id));
+      const candidates = [...ranked, ...searchCandidates.filter((candidate) => !rankedIds.has(candidate.id))].slice(0, 40);
       const raw = record(await desktop.askAgents({ question: normalized, candidates }));
+      if (sequence !== aiSearchSequence.current || normalized !== latestSearch.current.trim() || snapshot !== latestSnapshot.current) return;
       const problem = resultError(raw);
       if (problem) throw new Error(problem);
       setAiSearchIds(arrayOf<string>(raw.ids));
       if (typeof raw.message === 'string' && raw.message) setAiSearchMessage(raw.message);
       if (raw.action !== 'search') notify(String(raw.message || 'AI could not search this request.'), 'info');
     } catch (error) {
+      if (sequence !== aiSearchSequence.current || normalized !== latestSearch.current.trim() || snapshot !== latestSnapshot.current) return;
       setAiSearchIds([]);
       notify(`AI search is unavailable; showing regular matches. ${errorMessage(error)}`, 'info');
     } finally {
-      setAiSearchBusy(false);
+      if (sequence === aiSearchSequence.current) setAiSearchBusy(false);
     }
   }, [desktop, notify, search, searchCandidates, snapshot]);
 
   useEffect(() => {
+    aiSearchSequence.current++;
+    setAiSearchIds([]);
+    setAiSearchMessage('');
+    setAiSearchBusy(false);
     if (!aiAvailable || search.trim().length < 3 || !snapshot) {
-      setAiSearchIds([]);
       return;
     }
     const timer = window.setTimeout(() => { void runAiSearch(search); }, 900);
@@ -747,27 +1057,22 @@ function App() {
   }, [aiAvailable, runAiSearch, search, snapshot]);
 
   const filteredOperations = useMemo(() => {
-    const normalized = search.trim().toLowerCase();
+    const normalized = search.trim();
     const aiRank = new Map(aiSearchIds.map((id, index) => [id, index]));
-    const generatedDocs = record(docsSettings.docs);
-    return (snapshot?.operations || []).map((operation) => {
-      const generated = record(operation.revisionId ? generatedDocs[operation.revisionId] : undefined);
-      const description = typeof generated.description === 'string' ? generated.description : '';
-      return description && !operation.description ? { ...operation, description } : operation;
-    }).filter((operation) => {
+    return documentedOperations.map((operation, index) => ({
+      operation,
+      index,
+      score: normalized ? scoreApiSearch(normalized, searchCandidates[index]) : 0,
+    })).filter(({ operation, score }) => {
       const matchesService = !selectedService || operation.serviceId === selectedService
         || operation.serviceName === snapshot?.services.find((service) => service.serviceId === selectedService)?.name;
-      const searchText = `${operation.httpMethod} ${operation.pathTemplate} ${operation.summary || ''} ${operation.description || ''} ${operation.serviceName}`.toLowerCase();
-      return matchesService && (!normalized || searchText.includes(normalized) || aiRank.has(operation.operationId));
+      return matchesService && (!normalized || score > 0 || aiRank.has(operation.operationId));
     }).sort((left, right) => {
-      const leftRank = aiRank.get(left.operationId);
-      const rightRank = aiRank.get(right.operationId);
-      if (leftRank === undefined && rightRank === undefined) return 0;
-      if (leftRank === undefined) return 1;
-      if (rightRank === undefined) return -1;
-      return leftRank - rightRank;
-    });
-  }, [aiSearchIds, docsSettings.docs, search, selectedService, snapshot]);
+      const leftRank = aiRank.get(left.operation.operationId);
+      const rightRank = aiRank.get(right.operation.operationId);
+      return combinedSearchScore(right.score, rightRank) - combinedSearchScore(left.score, leftRank) || left.index - right.index;
+    }).map(({ operation }) => operation);
+  }, [aiSearchIds, documentedOperations, searchCandidates, search, selectedService, snapshot]);
 
   useEffect(() => {
     if (!selectedOperation?.revisionId) return;
@@ -884,7 +1189,8 @@ function App() {
       if (opened) {
         applySnapshot(opened.text, opened.name, opened.id);
         await refreshWorkspaceSnapshots();
-        notify(`Opened ${opened.name}.`, 'success');
+        const skipped = opened.skipped || [];
+        notify(skipped.length ? `Opened ${opened.name}. Skipped imports: ${skipped.join(' ')}` : `Opened ${opened.name}.`, skipped.length ? 'info' : 'success');
       }
     } catch (error) {
       notify(`The snapshot could not be opened: ${errorMessage(error)}`, 'error');
@@ -1230,6 +1536,11 @@ function App() {
       const problem = resultError(result);
       if (problem) throw new Error(problem);
       setPreferences(next);
+      if (next.textScale !== preferences.textScale) {
+        const scaleResult = await desktop.setTextScale(next.textScale);
+        const scaleProblem = resultError(scaleResult);
+        if (scaleProblem) throw new Error(scaleProblem);
+      }
       const chromeResult = await desktop.setWindowAppearance(next.mode);
       const chromeProblem = resultError(chromeResult);
       if (chromeProblem) throw new Error(chromeProblem);
@@ -1263,24 +1574,10 @@ function App() {
     }
   };
 
-  const saveTokenType = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const saveTokenType = async (config: TokenCurlConfig & { name: string; tokenField: string }) => {
     if (!tokenEditor) return;
-    const form = new FormData(event.currentTarget);
-    const config = {
-      name: String(form.get('name') || ''),
-      mode: 'request',
-      url: String(form.get('url') || ''),
-      method: String(form.get('method') || 'POST'),
-      headers: String(form.get('headers') || ''),
-      contentType: String(form.get('contentType') || 'json'),
-      body: String(form.get('body') || ''),
-      tokenField: String(form.get('tokenField') || 'access_token'),
-      auth: String(form.get('auth') || 'none'),
-      basic: String(form.get('basic') || ''),
-    };
     try {
-      const result = record(await desktop.saveTokenType({ id: tokenEditor.id || undefined, config }));
+      const result = record(await desktop.saveTokenType({ id: tokenEditor.id || undefined, config: { ...config, mode: 'request' } }));
       const problem = resultError(result);
       if (problem) throw new Error(problem);
       setTokenTypes(arrayOf<TokenType>(record(result).types));
@@ -1348,13 +1645,14 @@ function App() {
   const saveAiSettings = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    const generateAfterScan = event.currentTarget.querySelector<HTMLInputElement>('input[name="generateAfterScan"]');
     const input = {
       provider: String(form.get('provider') || 'local'),
       baseUrl: String(form.get('baseUrl') || ''),
       model: String(form.get('model') || ''),
-      instructions: String(form.get('instructions') || ''),
-      afterScanInstructions: String(form.get('afterScanInstructions') || ''),
-      generateAfterScan: form.get('generateAfterScan') === 'on',
+      instructions: String(form.get('instructions') ?? docsSettings.instructions ?? ''),
+      afterScanInstructions: String(form.get('afterScanInstructions') ?? docsSettings.afterScanInstructions ?? ''),
+      generateAfterScan: generateAfterScan ? generateAfterScan.checked : docsSettings.generateAfterScan !== false,
     };
     setBusy(true);
     try {
@@ -1367,7 +1665,7 @@ function App() {
         if (keyProblem) throw new Error(keyProblem);
         setAiKey('');
       }
-      setDocsSettings({ ...docsSettings, ...input, hasKey: !!record(result).hasKey });
+      setDocsSettings(record(await desktop.getDocs()));
       const status = record(await desktop.modelStatus());
       setAiAvailable(status.available === true);
       setAiStatus(status.available === true
@@ -1411,6 +1709,62 @@ function App() {
         : 'Documentation generation started.'), result.factualFallback ? 'info' : 'success');
     } catch (error) {
       notify(`Documentation could not be started: ${errorMessage(error)}`, 'error');
+    }
+  };
+
+  const copyExternalPrompt = async (kind: 'source' | 'enrich') => {
+    const prompt = record(docsSettings.externalPrompts)[kind];
+    if (typeof prompt !== 'string' || !prompt) {
+      notify('The external documentation prompt is unavailable.', 'error');
+      return;
+    }
+    try {
+      const definitions = snapshot?.customFieldDefinitions || [];
+      const requestedFields = definitions.length
+        ? `\n\nRequested custom fields: ${JSON.stringify(definitions)}.`
+        : '\n\nSpecify any desired custom field keys and labels when supplying the source or catalog.';
+      await navigator.clipboard.writeText(`${prompt}${requestedFields}`);
+      notify('Prompt copied. Review source or catalog data before sharing it with an external tool.', 'success');
+    } catch (error) {
+      notify(`Could not copy the prompt: ${errorMessage(error)}`, 'error');
+    }
+  };
+
+  const exportSnapshot = async (selection: Record<string, unknown>): Promise<boolean> => {
+    try {
+      const result = record(await desktop.exportCatalog(selection));
+      if (result.cancelled === true) return false;
+      const problem = resultError(result);
+      if (problem) throw new Error(problem);
+      if (result.ok !== true) throw new Error('The catalog could not be exported.');
+      notify('Snapshot exported. Review it before sharing.', 'success');
+      return true;
+    } catch (error) {
+      notify(`Could not export the snapshot: ${errorMessage(error)}`, 'error');
+      return false;
+    }
+  };
+
+  const saveCustomFields = async (definitions: CustomFieldDefinition[], changed?: { id: string; values: Record<string, string> }): Promise<boolean> => {
+    if (!snapshot) return false;
+    const keys = new Set(definitions.map((field) => field.key));
+    const values = Object.fromEntries(snapshot.operations.map((operation) => {
+      const current = changed?.id === operation.operationId ? changed.values : operation.customFields || {};
+      return [operation.operationId, Object.fromEntries(Object.entries(current).filter(([key]) => keys.has(key)))];
+    }));
+    try {
+      const result = record(await desktop.saveSnapshotCustomFields({ definitions, values }));
+      const problem = resultError(result);
+      if (problem) throw new Error(problem);
+      if (result.ok !== true || typeof result.text !== 'string') throw new Error('The snapshot could not be updated.');
+      const updated = parseSnapshot(result.text);
+      setSnapshot(updated);
+      setSelectedOperation((current) => current ? updated.operations.find((operation) => operation.operationId === current.operationId) || current : null);
+      notify('Custom API fields saved.', 'success');
+      return true;
+    } catch (error) {
+      notify(`Could not save custom fields: ${errorMessage(error)}`, 'error');
+      return false;
     }
   };
 
@@ -1607,7 +1961,6 @@ function App() {
             <span>{token ? 'Access token ready' : 'Access token'}</span>
             <span aria-hidden="true">{accessTokenOpen ? '⌃' : '⌄'}</span>
           </button>
-          <Button className="classic-view-button" onClick={() => { window.location.href = '../classic/index.html'; }}>Classic view</Button>
           <button className="icon-button" type="button" title={`Settings (${shortcut(platform, ',')})`} onClick={() => openSettings()}>
             <span aria-hidden="true">⚙</span><span className="sr-only">Settings</span>
           </button>
@@ -1620,7 +1973,6 @@ function App() {
               <button type="button" role="menuitem" onClick={() => { setOverflowOpen(false); void beginLocalScan(); }}>Scan local project…</button>
               <button type="button" role="menuitem" onClick={() => { setOverflowOpen(false); setCustomRequestEditor(true); }}>New request</button>
               <div className="overflow-divider" />
-              <button type="button" role="menuitem" onClick={() => { window.location.href = '../classic/index.html'; }}>More features · Classic workspace</button>
               <button type="button" role="menuitem" onClick={() => { setOverflowOpen(false); openSettings(); }}>Settings</button>
             </div>}
           </div>
@@ -1658,7 +2010,7 @@ function App() {
           <Button onClick={() => { void copyGlobalToken(); }} disabled={!token}>{globalTokenStatus.startsWith('Copied') ? 'Copied' : 'Copy token'}</Button>
           <Button onClick={() => setToken('')} disabled={!token}>Clear</Button>
           <button className="icon-button" type="button" aria-label="Collapse global access token" onClick={() => setAccessTokenOpen(false)}>⌃</button>
-          {globalTokenStatus && <p className={globalTokenStatus.toLowerCase().includes('ready for') || globalTokenStatus.startsWith('Copied') ? 'global-token-status success' : 'global-token-status'}>{globalTokenStatus}</p>}
+          {globalTokenStatus && <div className={globalTokenStatus.toLowerCase().includes('ready for') || globalTokenStatus.startsWith('Copied') ? 'global-token-status success' : 'global-token-status'} role="status"><span>{globalTokenStatus}</span><button type="button" aria-label="Dismiss token status" onClick={() => setGlobalTokenStatus('')}>×</button></div>}
         </section>
       )}
 
@@ -1729,6 +2081,9 @@ function App() {
               onSelectService={setSelectedService}
               onOpenOperation={openOperation}
               onNewRequest={() => setCustomRequestEditor(true)}
+              customFields={snapshot.customFieldDefinitions}
+              onConfigureFields={() => setCustomFieldEditorOpen(true)}
+              onExportSnapshot={() => setShareSnapshotOpen(true)}
               snapshotName={snapshotName}
               aiIds={aiSearchIds}
               aiMessage={aiSearchMessage}
@@ -1829,6 +2184,10 @@ function App() {
               onGenerateDocs={() => {
                 void generateDocumentation(snapshot?.operations || []);
               }}
+              hasSnapshot={!!snapshot}
+              onCopyExternalPrompt={(kind) => { void copyExternalPrompt(kind); }}
+              onExportExternalCatalog={() => setShareSnapshotOpen(true)}
+              onImportExternalSnapshot={() => { void openSnapshot(); }}
               busy={busy}
             />
           )}
@@ -1897,9 +2256,14 @@ function App() {
           onSend={() => { void sendSelectedRequest(); }}
           documentationBusy={docJob.state === 'running'}
           onDocument={() => { void generateDocumentation([selectedOperation]); }}
+          customFields={snapshot?.customFieldDefinitions || []}
+          onSaveCustomFields={(values) => saveCustomFields(snapshot?.customFieldDefinitions || [], { id: selectedOperation.operationId, values })}
           onClose={() => setSelectedOperation(null)}
         />
       )}
+
+      {shareSnapshotOpen && snapshot && <ShareSnapshotDialog services={snapshot.services} environments={environments} tokenTypes={tokenTypes} variables={variables} defaultEnvironmentId={activeEnvironmentId} onExport={exportSnapshot} onClose={() => setShareSnapshotOpen(false)} />}
+      {customFieldEditorOpen && snapshot && <CustomFieldDialog initial={snapshot.customFieldDefinitions} onSave={(definitions) => saveCustomFields(definitions)} onClose={() => setCustomFieldEditorOpen(false)} />}
 
       {environmentEditor && (
         <Dialog
@@ -1980,24 +2344,14 @@ function App() {
       )}
 
       {tokenEditor && (
-        <Dialog title={tokenEditor.id ? 'Edit token type' : 'Add token type'} detail="Define how Reqzen fetches an access token for a request." onClose={() => setTokenEditor(null)} className="wide-dialog">
-          <form className="dialog-form" onSubmit={(event) => { void saveTokenType(event); }}>
-            <Field label="Token type name"><input name="name" autoFocus required defaultValue={tokenEditor.name} placeholder="Support token" /></Field>
-            <div className="form-grid">
-              <Field label="Method"><select name="method" defaultValue={tokenEditor.method || 'POST'}>{methods.map((method) => <option key={method}>{method}</option>)}</select></Field>
-              <Field label="Token endpoint"><input name="url" required defaultValue={tokenEditor.url || ''} placeholder="https://auth.example.com/oauth/token" /></Field>
-            </div>
-            <div className="form-grid">
-              <Field label="Content type"><select name="contentType" defaultValue={tokenEditor.contentType || 'json'}><option value="json">JSON</option><option value="form">Form</option></select></Field>
-              <Field label="Access token field"><input name="tokenField" defaultValue={tokenEditor.tokenField || 'access_token'} /></Field>
-            </div>
-            <Field label="Request headers"><textarea name="headers" rows={3} defaultValue={tokenEditor.headers || ''} placeholder="Accept: application/json" /></Field>
-            <Field label="Request body"><textarea name="body" rows={5} defaultValue={tokenEditor.body || ''} placeholder='{"client":"reqzen"}' /></Field>
-            <Field label="Send access token with this token call"><select name="auth" defaultValue={tokenEditor.auth || 'none'}><option value="none">None</option><option value="bearer">Bearer token</option><option value="basic">Basic authentication</option></select></Field>
-            <Field label="Basic credential" hint="Used only for this token call and kept in memory/workspace only when explicitly exported."><input type="password" name="basic" autoComplete="off" defaultValue={tokenEditor.basic || ''} placeholder="client-id:client-secret" /></Field>
-            <div className="dialog-actions"><Button type="button" onClick={() => setTokenEditor(null)}>Cancel</Button><Button variant="primary" type="submit">Save token type</Button></div>
-          </form>
-        </Dialog>
+        <TokenTypeDialog
+          initial={tokenEditor}
+          environments={environments}
+          defaultEnvironmentId={activeEnvironmentId}
+          tokensByEnvironment={tokensByEnvironment}
+          onSave={saveTokenType}
+          onClose={() => setTokenEditor(null)}
+        />
       )}
 
       {confirmationPrompt && (
@@ -2184,7 +2538,7 @@ function App() {
       )}
 
       {notice && (
-        <div className={`toast toast-${notice.severity}`} role={notice.severity === 'error' ? 'alert' : 'status'}>
+        <div className={`toast toast-${notice.severity}`} role={notice.severity === 'error' ? 'alert' : 'status'} onMouseEnter={() => setNoticePaused(true)} onMouseLeave={() => setNoticePaused(false)} onFocus={() => setNoticePaused(true)} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setNoticePaused(false); }}>
           <span>{notice.message}</span><button type="button" onClick={() => setNotice(null)} aria-label="Dismiss notification">×</button>
         </div>
       )}
@@ -2271,6 +2625,9 @@ function ProjectRow({ project }: { project: Project }) {
 function Catalog({
   operations,
   services,
+  customFields,
+  onConfigureFields,
+  onExportSnapshot,
   selectedService,
   serviceName,
   onSelectService,
@@ -2287,6 +2644,9 @@ function Catalog({
 }: {
   operations: Operation[];
   services: Service[];
+  customFields: CustomFieldDefinition[];
+  onConfigureFields: () => void;
+  onExportSnapshot: () => void;
   selectedService: string;
   serviceName: string;
   onSelectService: (serviceId: string) => void;
@@ -2304,7 +2664,19 @@ function Catalog({
   const [servicesCollapsed, setServicesCollapsed] = useState(false);
   const [servicesSide, setServicesSide] = useState<'left' | 'right'>('left');
   const [serviceWidth, setServiceWidth] = useState(220);
+  const catalogActionsRef = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const dismiss = (event: MouseEvent) => {
+      if (catalogActionsRef.current && !catalogActionsRef.current.contains(event.target as Node)) catalogActionsRef.current.open = false;
+    };
+    document.addEventListener('mousedown', dismiss);
+    return () => document.removeEventListener('mousedown', dismiss);
+  }, []);
   const aiSet = useMemo(() => new Set(aiIds), [aiIds]);
+  const visibleFields = customFields.filter((field) => field.visible);
+  const columnsStyle: CSSProperties | undefined = visibleFields.length
+    ? { gridTemplateColumns: `62px minmax(160px, 1.2fr) minmax(100px, .8fr) minmax(150px, 1fr) 64px repeat(${visibleFields.length}, minmax(130px, 1fr))`, minWidth: `${700 + visibleFields.length * 140}px` }
+    : undefined;
   const startServiceResize = (event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault();
     const startX = event.clientX;
@@ -2324,7 +2696,17 @@ function Catalog({
     <div className="catalog-page">
       <div className="page-heading">
         <div><p className="breadcrumb">WORKSPACE <span>/</span> CATALOG</p><h1>API catalog</h1><p className="page-description">Browse and prepare requests across your services.</p></div>
-        <div className="page-actions"><span className="snapshot-chip">◫ {snapshotName || 'Loaded catalog'}</span><Button variant="primary" onClick={onNewRequest}>＋ New request</Button></div>
+        <div className="page-actions">
+          <span className="snapshot-chip" title={snapshotName || 'Loaded catalog'}>◫ {snapshotName || 'Loaded catalog'}</span>
+          <details ref={catalogActionsRef} className="catalog-actions" onKeyDown={(event) => { if (event.key === 'Escape') { event.currentTarget.open = false; event.currentTarget.querySelector('summary')?.focus(); } }}>
+            <summary>Catalog actions <span aria-hidden="true">⌄</span></summary>
+            <div className="catalog-actions-menu">
+              <button type="button" onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); onConfigureFields(); }}>Configure fields</button>
+              <button type="button" onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); onExportSnapshot(); }}>Export snapshot</button>
+            </div>
+          </details>
+          <Button variant="primary" onClick={onNewRequest}>＋ New request</Button>
+        </div>
       </div>
       {aiMessage && <div className="ai-search-message" role="status">{aiMessage}</div>}
       <div className={`catalog-layout services-${servicesSide} ${servicesCollapsed ? 'services-collapsed' : ''}`} style={{ '--service-width': `${serviceWidth}px` } as CSSProperties}>
@@ -2352,18 +2734,20 @@ function Catalog({
             </div>
           </div>
           {operations.length ? (
-            <div className="operation-table">
-              <div className="operation-table-head" aria-hidden="true">
+            <div className={`operation-table ${visibleFields.length ? 'custom-columns' : ''}`}>
+              <div className="operation-table-head" aria-hidden="true" style={columnsStyle}>
                 <span>Method</span><span>Path</span><span>Service</span><span>Summary</span><span>Version</span>
+                {visibleFields.map((field) => <span key={field.key}>{field.label}</span>)}
               </div>
               <div className="operation-rows">
               {operations.map((operation) => (
-                <button className={`operation-row ${aiSet.has(operation.operationId) ? 'ai-suggested' : ''}`} key={operation.operationId} type="button" onClick={() => onOpenOperation(operation)}>
+                <button className={`operation-row ${aiSet.has(operation.operationId) ? 'ai-suggested' : ''}`} key={operation.operationId} type="button" style={columnsStyle} onClick={() => onOpenOperation(operation)}>
                   <MethodBadge method={operation.httpMethod} />
                   <span className="operation-path"><code>{operation.pathTemplate}</code>{aiSet.has(operation.operationId) && <span className="ai-badge">AI suggested</span>}</span>
                   <span className="operation-service">{operation.serviceName}</span>
                   <span className="operation-summary">{operation.summary || '—'}</span>
                   <span className="operation-version">{versionFor(operation)}</span>
+                  {visibleFields.map((field) => <span className="operation-custom-field" key={field.key} title={`${field.label}: ${operation.customFields?.[field.key] || 'Not set'}`}>{operation.customFields?.[field.key] || '—'}</span>)}
                 </button>
               ))}
               </div>
@@ -2402,6 +2786,8 @@ function RequestDialog({
   onSend,
   documentationBusy,
   onDocument,
+  customFields,
+  onSaveCustomFields,
   onClose,
   platform,
 }: {
@@ -2429,6 +2815,8 @@ function RequestDialog({
   onSend: () => void;
   documentationBusy: boolean;
   onDocument: () => void;
+  customFields: CustomFieldDefinition[];
+  onSaveCustomFields: (values: Record<string, string>) => Promise<boolean>;
   onClose: () => void;
   platform: Platform;
 }) {
@@ -2508,6 +2896,7 @@ function RequestDialog({
         <div className="request-content">
           <section className="request-section">
             <div className="request-section-head"><div><h3>Request settings</h3><p>Values are used for this request only.</p></div><div className="request-quick-actions"><button type="button" className="quiet-action" onClick={onFavourite}>{isFavourite ? '★ Saved' : '☆ Favourite'}</button><button type="button" className="quiet-action" onClick={onDocument} disabled={documentationBusy}>{documentationBusy ? 'Documenting…' : 'Document'}</button></div></div>
+            <OperationCustomFields key={operation.operationId} operation={operation} definitions={customFields} onSave={onSaveCustomFields} />
             <Field label="Environment">
               <select value={activeEnvironmentId} onChange={(event) => onEnvironment(event.target.value)}>
                 <option value="">Choose an environment</option>
@@ -2714,6 +3103,10 @@ function Settings({
   onScanClone,
   onStopDocs,
   onGenerateDocs,
+  hasSnapshot,
+  onCopyExternalPrompt,
+  onExportExternalCatalog,
+  onImportExternalSnapshot,
   busy,
 }: {
   section: SettingsSection;
@@ -2752,6 +3145,10 @@ function Settings({
   onScanClone: (clone: string) => void;
   onStopDocs: () => void;
   onGenerateDocs: () => void;
+  hasSnapshot: boolean;
+  onCopyExternalPrompt: (kind: 'source' | 'enrich') => void;
+  onExportExternalCatalog: () => void;
+  onImportExternalSnapshot: () => void;
   busy: boolean;
 }) {
   const [provider, setProvider] = useState(String(docsSettings.provider || 'local'));
@@ -2793,6 +3190,15 @@ function Settings({
                   {(['blue', 'teal', 'violet', 'amber', 'graphite'] as const).map((palette) => <button key={palette} type="button" className={`palette-choice palette-${palette} ${preferences.palette === palette ? 'selected' : ''}`} aria-pressed={preferences.palette === palette} onClick={() => onPreferences({ palette })}><span />{palette === 'blue' ? 'Ocean blue' : palette[0].toUpperCase() + palette.slice(1)}</button>)}
                 </div>
               </Field>
+              <div className="text-size-setting">
+                <div><strong>Text and interface size</strong><p>Uses your system font. Scaling also enlarges controls for readability.</p></div>
+                <div className="text-size-controls" role="group" aria-label="Text and interface size">
+                  <Button type="button" aria-label="Decrease text size" disabled={preferences.textScale <= 80} onClick={() => onPreferences({ textScale: preferences.textScale - 10 })}>A−</Button>
+                  <output aria-live="polite">{preferences.textScale}%</output>
+                  <Button type="button" aria-label="Increase text size" disabled={preferences.textScale >= 150} onClick={() => onPreferences({ textScale: preferences.textScale + 10 })}>A＋</Button>
+                  <Button type="button" onClick={() => onPreferences({ textScale: 100 })} disabled={preferences.textScale === 100}>Reset</Button>
+                </div>
+              </div>
             </section>
           )}
           {section === 'environments' && (
@@ -2871,6 +3277,27 @@ function Settings({
                 <Field label="Manual-run instructions"><textarea name="instructions" rows={7} defaultValue={String(docsSettings.instructions || '')} placeholder="Optional instructions for documentation drafts" /></Field>
               </>}
               <div className="privacy-note">Documentation generation uses the AI provider selected in AI model and provider. Review generated text before sharing.</div>
+              <div className="scan-secondary-panel">
+                <h3>Use an external AI tool</h3>
+                <p>Copy a prompt to generate a snapshot from source, or export the current catalog and enrich it externally. Save the complete JSON response and import it as a snapshot.</p>
+                <p>Prompts use your saved manual instructions. Snapshot exports can include selected environments, token types, and variables. Review all source and catalog data before sharing.</p>
+                <div className="external-workflows">
+                  <div className="external-workflow">
+                    <strong>Start from source</strong>
+                    <span>Use with a tool that can inspect your project.</span>
+                    <Button type="button" onClick={() => onCopyExternalPrompt('source')}>Copy source prompt</Button>
+                  </div>
+                  <div className="external-workflow">
+                    <strong>Enrich this catalog</strong>
+                    <span>Export your catalog and provide it with the prompt.</span>
+                    <div className="button-row">
+                      <Button type="button" onClick={() => onCopyExternalPrompt('enrich')}>Copy enrichment prompt</Button>
+                      <Button type="button" disabled={!hasSnapshot} onClick={onExportExternalCatalog}>Export catalog</Button>
+                    </div>
+                  </div>
+                </div>
+                <div className="external-import"><span>Have a generated snapshot?</span><Button type="button" onClick={onImportExternalSnapshot}>Import snapshot</Button></div>
+              </div>
               <div className="button-row"><Button type="button" onClick={() => onSection('ai')}>Configure AI provider</Button><Button variant="primary" type="submit" disabled={busy}>Save documentation settings</Button></div>
             </form>
           )}
