@@ -11,7 +11,7 @@ contextBridge.exposeInMainWorld('desktop', {
   lastSnapshot: () => ipcRenderer.invoke('snapshot:last'),
   runRequest: (run) => ipcRenderer.invoke('request:run', run),
   modelStatus: () => ipcRenderer.invoke('model:status'),
-  listModels: () => ipcRenderer.invoke('model:list'),
+  listModels: (input) => ipcRenderer.invoke('model:list', input),
   onModelSettingsChanged: (callback) => {
     const handler = () => callback();
     ipcRenderer.on('model:settings-changed', handler);

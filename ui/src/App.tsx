@@ -34,6 +34,7 @@ interface Operation {
   definition?: Record<string, unknown>;
   parameters?: ApiParameter[];
   customFields?: Record<string, string>;
+  documentationSource?: 'spec' | 'local' | 'openai' | 'claude' | 'template';
 }
 
 interface CustomFieldDefinition {
@@ -388,12 +389,13 @@ function TokenTypeDialog({
   };
   const importCurl = () => {
     try {
-      const { droppedBearer, ...parsed } = parseTokenCurl(curl);
+      const { droppedBearer, securityWarning, ...parsed } = parseTokenCurl(curl);
       update(parsed);
       setMessageError(false);
-      setMessage(droppedBearer
-        ? 'Imported. The Bearer value was not saved; the selected environment’s access token will be used.'
-        : 'Imported. Review the request before saving or testing.');
+      const notes = [];
+      if (droppedBearer) notes.push('The Bearer value was not saved; the selected environment’s access token will be used.');
+      if (securityWarning) notes.push('The source command disables TLS certificate verification. Recheck the endpoint before testing it.');
+      setMessage(`Imported. ${notes.length ? notes.join(' ') : 'Review the request before saving or testing.'}`);
     } catch (error) {
       setMessageError(true);
       setMessage(errorMessage(error));
@@ -627,6 +629,8 @@ function App() {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [findOpen, setFindOpen] = useState(false);
   const [findQuery, setFindQuery] = useState('');
+  const [findMatch, setFindMatch] = useState({ active: 0, total: 0 });
+  const findTimerRef = useRef<number | null>(null);
   const [localProjects, setLocalProjects] = useState<Project[] | null>(null);
   const [githubProjectState, setGithubProjectState] = useState<{
     repo: string;
@@ -862,8 +866,17 @@ function App() {
     };
   }, [overflowOpen]);
 
-  useEffect(() => desktop.onFindResult(() => {
-    if (findOpen) window.setTimeout(() => findInputRef.current?.focus(), 0);
+  useEffect(() => desktop.onFindResult((value) => {
+    const result = record(value);
+    setFindMatch({ active: Number(result.active || 0), total: Number(result.total || 0) });
+    if (findOpen) window.requestAnimationFrame(() => {
+      const input = findInputRef.current;
+      if (!input) return;
+      const start = input.selectionStart;
+      const end = input.selectionEnd;
+      input.focus({ preventScroll: true });
+      if (start !== null && end !== null) input.setSelectionRange(start, end);
+    });
   }), [desktop, findOpen]);
 
   useEffect(() => {
@@ -977,6 +990,10 @@ function App() {
     }
   }, [commandOpen]);
 
+  useEffect(() => () => {
+    if (findTimerRef.current !== null) window.clearTimeout(findTimerRef.current);
+  }, []);
+
   useEffect(() => {
     if (customRequestEditor) {
       setCustomRequestMode('form');
@@ -1001,10 +1018,14 @@ function App() {
       const generated = record(operation.revisionId ? generatedDocs[operation.revisionId] : undefined);
       const description = typeof generated.description === 'string' ? generated.description : '';
       const summary = typeof generated.summary === 'string' ? generated.summary : '';
+      const generatedSource: Operation['documentationSource'] = generated.source === 'local' || generated.source === 'openai' || generated.source === 'claude' || generated.source === 'template'
+        ? generated.source
+        : undefined;
       return {
         ...operation,
         description: operation.description || description,
         summary: operation.summary || summary,
+        documentationSource: operation.description ? 'spec' as const : generatedSource,
       };
     });
   }, [docsSettings.docs, snapshot]);
@@ -2515,20 +2536,24 @@ function App() {
         <div className="find-bar">
           <label htmlFor="find-input">Find in page</label>
           <input ref={findInputRef} id="find-input" autoFocus value={findQuery} onChange={(event) => {
-            setFindQuery(event.target.value);
-            const input = event.currentTarget;
-            void desktop.findInPage({ text: event.target.value }).finally(() => {
-              window.setTimeout(() => {
-                if (document.contains(input)) input.focus();
-              }, 0);
-            });
+            const text = event.target.value;
+            setFindQuery(text);
+            setFindMatch({ active: 0, total: 0 });
+            if (findTimerRef.current !== null) window.clearTimeout(findTimerRef.current);
+            findTimerRef.current = window.setTimeout(() => {
+              void desktop.findInPage({ text });
+            }, 80);
           }} onKeyDown={(event) => {
-            if (event.key === 'Enter') void desktop.findInPage({ text: findQuery, findNext: true });
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              void desktop.findInPage({ text: findQuery, findNext: true, forward: !event.shiftKey });
+            }
             if (event.key === 'Escape') {
               setFindOpen(false);
               void desktop.stopFind();
             }
           }} />
+          <span className="find-match" aria-live="polite">{findMatch.total ? `${findMatch.active} of ${findMatch.total}` : findQuery ? 'No matches' : 'Type to find'}</span>
           <Button onClick={() => { setFindOpen(false); void desktop.stopFind(); }}>Done</Button>
         </div>
       )}
@@ -2633,7 +2658,7 @@ function Welcome({
             <span className="start-icon start-icon-green">＋</span><span className="start-label">04 · QUICK START</span><strong>New request</strong><small>Build a request without a catalog.</small><span className="card-arrow">→</span>
           </button>
         </div>
-        <div className="welcome-bottom"><span>Need an environment or AI model?</span><button type="button" onClick={onSettings}>Set up workspace <span aria-hidden="true">→</span></button></div>
+        <div className="welcome-bottom"><span>{hasSnapshot ? 'Need to adjust environments, tokens, or AI?' : 'Need to configure environments, tokens, or AI first?'}</span><button type="button" onClick={onSettings}>{hasSnapshot ? 'Manage workspace settings' : 'Configure workspace'} <span aria-hidden="true">→</span></button></div>
       </div>
     </div>
   );
@@ -2785,7 +2810,11 @@ function Catalog({
                   <MethodBadge method={operation.httpMethod} />
                   <span className="operation-path"><code>{operation.pathTemplate}</code>{aiSet.has(operation.operationId) && <span className="ai-badge">AI suggested</span>}</span>
                   <span className="operation-service">{operation.serviceName}</span>
-                  <span className="operation-summary">{operation.summary || '—'}</span>
+                  <span className="operation-summary">
+                    <strong>{operation.summary || '—'}</strong>
+                    <small>{operation.description || 'No API description available.'}</small>
+                    {operation.documentationSource && <em>{operation.documentationSource === 'spec' ? 'Source documentation' : operation.documentationSource === 'template' ? 'Factual fallback' : 'AI-generated'}</em>}
+                  </span>
                   <span className="operation-version">{versionFor(operation)}</span>
                   {visibleFields.map((field) => <span className="operation-custom-field" key={field.key} title={`${field.label}: ${operation.customFields?.[field.key] || 'Not set'}`}>{operation.customFields?.[field.key] || '—'}</span>)}
                 </button>
@@ -3212,8 +3241,57 @@ function Settings({
   busy: boolean;
 }) {
   const [provider, setProvider] = useState(String(docsSettings.provider || 'local'));
+  const [providerBaseUrl, setProviderBaseUrl] = useState(String(docsSettings.baseUrl || ''));
+  const [providerModel, setProviderModel] = useState(String(docsSettings.model || ''));
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [loadingModels, setLoadingModels] = useState(false);
+  const [modelsError, setModelsError] = useState('');
   const [scanPreset, setScanPreset] = useState('spring');
-  useEffect(() => setProvider(String(docsSettings.provider || 'local')), [docsSettings.provider]);
+  useEffect(() => {
+    setProvider(String(docsSettings.provider || 'local'));
+    setProviderBaseUrl(String(docsSettings.baseUrl || ''));
+    setProviderModel(String(docsSettings.model || ''));
+    setAvailableModels([]);
+    setModelsError('');
+  }, [docsSettings.baseUrl, docsSettings.model, docsSettings.provider]);
+  const changeProvider = (next: string) => {
+    const currentProvider = String(docsSettings.provider || 'local');
+    setProvider(next);
+    setProviderBaseUrl(currentProvider === next
+      ? String(docsSettings.baseUrl || '')
+      : next === 'local' ? 'http://127.0.0.1:11434' : 'http://127.0.0.1:11434/v1');
+    setProviderModel(currentProvider === next ? String(docsSettings.model || '') : '');
+    setAvailableModels([]);
+    setModelsError('');
+  };
+  const loadAvailableModels = async () => {
+    setLoadingModels(true);
+    setModelsError('');
+    try {
+      const result = record(await window.desktop.listModels({
+        provider,
+        baseUrl: providerBaseUrl,
+        model: providerModel,
+      }));
+      const problem = resultError(result);
+      if (problem) throw new Error(problem);
+      const models = arrayOf<string>(result.models);
+      setAvailableModels(models);
+      if (models.length === 0) {
+        setModelsError('The server responded, but it has no installed models.');
+      } else if (!providerModel || !models.includes(providerModel)) {
+        setProviderModel(models[0]);
+      }
+    } catch (error) {
+      setAvailableModels([]);
+      setModelsError(errorMessage(error));
+    } finally {
+      setLoadingModels(false);
+    }
+  };
+  useEffect(() => {
+    if (section === 'ai' && provider === 'local' && providerBaseUrl) void loadAvailableModels();
+  }, [section, provider, providerBaseUrl]);
   const nav: Array<{ id: SettingsSection; title: string; caption: string; icon: string }> = [
     { id: 'appearance', title: 'Appearance', caption: 'Theme and accent', icon: '◐' },
     { id: 'environments', title: 'Environments', caption: 'Hosts and confirmations', icon: '◎' },
@@ -3297,15 +3375,22 @@ function Settings({
             <>
               <form className="settings-card" onSubmit={onSaveAi}>
                 <div className="card-title-row"><div><h2>AI model and provider</h2><p>AI is optional. Basic scanning and request building work without it.</p></div><span className="optional-chip">OPTIONAL</span></div>
-                <Field label="Provider"><select name="provider" value={provider} onChange={(event) => setProvider(event.target.value)}><option value="local">Local model (Ollama)</option><option value="openai">OpenAI-compatible</option><option value="claude">Claude API</option></select></Field>
+                <Field label="Provider"><select name="provider" value={provider} onChange={(event) => changeProvider(event.target.value)}><option value="local">Local model (Ollama)</option><option value="openai">OpenAI-compatible</option><option value="claude">Claude API</option></select></Field>
                 {provider === 'local' && <>
-                  <Field label="Local Ollama server URL" hint="Use a URL reachable from this computer. The server stays local unless you configure otherwise."><input name="baseUrl" defaultValue={String(docsSettings.baseUrl || 'http://127.0.0.1:11434')} placeholder="http://127.0.0.1:11434" /></Field>
-                  <Field label="Local model ID"><input name="model" defaultValue={String(docsSettings.model || '')} placeholder="llama3.2" /></Field>
+                  <Field label="Local Ollama server URL" hint="Use a loopback URL on this computer."><input name="baseUrl" value={providerBaseUrl || 'http://127.0.0.1:11434'} onChange={(event) => { setProviderBaseUrl(event.target.value); setAvailableModels([]); }} placeholder="http://127.0.0.1:11434" /></Field>
+                  <Field label="Installed local model"><select name="model" value={providerModel} onChange={(event) => setProviderModel(event.target.value)}><option value="">Choose an installed model</option>{availableModels.map((model) => <option value={model} key={model}>{model}</option>)}{providerModel && !availableModels.includes(providerModel) && <option value={providerModel}>{providerModel} · saved</option>}</select></Field>
+                  <div className="button-row"><Button type="button" onClick={() => { void loadAvailableModels(); }} disabled={loadingModels || !providerBaseUrl.trim()}>{loadingModels ? 'Loading models…' : 'Load installed models'}</Button></div>
+                  {modelsError && <p className="field-error" role="status">{modelsError}</p>}
                 </>}
                 {provider === 'openai' && <>
-                  <Field label="OpenAI-compatible API base URL"><input name="baseUrl" defaultValue={String(docsSettings.baseUrl || 'http://127.0.0.1:11434/v1')} placeholder="https://api.example.com/v1" /></Field>
-                  <Field label="Model ID"><input name="model" defaultValue={String(docsSettings.model || '')} placeholder="Model identifier" /></Field>
+                  <Field label="OpenAI-compatible API base URL"><input name="baseUrl" value={providerBaseUrl} onChange={(event) => { setProviderBaseUrl(event.target.value); setAvailableModels([]); }} placeholder="https://api.example.com/v1" /></Field>
+                  <Field label="Model ID"><input name="model" list="available-ai-models" value={providerModel} onChange={(event) => setProviderModel(event.target.value)} placeholder="Model identifier" /></Field>
+                  <datalist id="available-ai-models">{availableModels.map((model) => <option value={model} key={model} />)}</datalist>
+                  <div className="button-row"><Button type="button" onClick={() => { void loadAvailableModels(); }} disabled={loadingModels || !providerBaseUrl.trim()}>{loadingModels ? 'Loading models…' : 'Load available models'}</Button></div>
+                  {modelsError && <p className="field-error" role="status">{modelsError}</p>}
                 </>}
+                {provider === 'claude' && <input type="hidden" name="baseUrl" value="" />}
+                {provider === 'claude' && <input type="hidden" name="model" value="" />}
                 {provider !== 'local' && <Field label="API key" hint="Held in memory only. Re-enter it after restarting Reqzen."><input type="password" autoComplete="off" value={aiKey} onChange={(event) => onAiKey(event.target.value)} placeholder={docsSettings.hasKey ? 'Key set for this session' : 'Not saved'} /></Field>}
                 <label className="check-row"><input name="generateAfterScan" type="checkbox" defaultChecked={docsSettings.generateAfterScan !== false} /><span><strong>Write descriptions after scanning</strong><small>Uses the selected model to draft API descriptions after you review the scan.</small></span></label>
                 <Field label="After-scan instructions"><textarea name="afterScanInstructions" rows={4} defaultValue={String(docsSettings.afterScanInstructions || '')} placeholder="Optional instructions for generated API descriptions" /></Field>

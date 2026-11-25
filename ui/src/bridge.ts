@@ -43,7 +43,7 @@ export interface DesktopBridge {
   saveDocSettings: (input: Record<string, unknown>) => Promise<unknown>;
   setDocKey: (input: Record<string, unknown>) => Promise<unknown>;
   modelStatus: () => Promise<unknown>;
-  listModels: () => Promise<unknown>;
+  listModels: (input?: Record<string, unknown>) => Promise<unknown>;
   listKeptClones: () => Promise<unknown>;
   deleteKeptClone: (input: Record<string, unknown>) => Promise<unknown>;
   getDocJob: () => Promise<unknown>;

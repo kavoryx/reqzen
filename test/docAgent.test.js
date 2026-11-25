@@ -55,7 +55,8 @@ test('a failing model is counted, and the template is used without a summary', a
   const noSummary = op({ summary: '' });
   const r = await doc.runDocAgent({ operations: [noSummary, op({ revisionId: 'rev-2' })], chat, source: 'claude' });
   assert.equal(r.modelFailures, 2);
-  assert.match(r.results[0].description, /^GET \/sample\/v1\/items\/\{itemId\} with itemId, expand\. Data unavailable/);
+  assert.equal(r.results[0].description, 'Retrieves items using itemId, expand.');
+  assert.equal(r.results[0].summary, 'Retrieves items using itemId, expand.');
   assert.equal(r.results[0].source, 'template');
 });
 
@@ -110,7 +111,7 @@ test('the version and a real summary reach the model, and the method name is not
   const p = doc.describePrompt(o, '');
   assert.match(p.user, /Version: v3/);
   assert.doesNotMatch(p.user, /Doc comment/);
-  assert.match(doc.templateDescription(o), /^GET \/sample\/v1\/items\/\{itemId\}/);
+  assert.match(doc.templateDescription(o), /^Retrieves items/);
 });
 
 test('external prompts share the documentation rules and specify an importable snapshot', () => {

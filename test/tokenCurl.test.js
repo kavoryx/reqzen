@@ -35,12 +35,22 @@ test('Bearer credentials are not imported, and unsupported shell and curl featur
   assert.equal(result.droppedBearer, true);
   for (const command of [
     "curl 'https://auth.example.test/token' --data @secret.txt",
-    "curl 'https://auth.example.test/token' --location",
     "curl 'https://auth.example.test/token' --json '{}' --json '{}'",
     'curl "https://auth.example.test/$TOKEN"',
     "curl 'https://auth.example.test/token' | other",
     "curl 'https://auth.example.test/token",
   ]) assert.throws(() => parseTokenCurl(command));
+});
+
+test('imports common browser curl options and shell continuations', async () => {
+  const { parseTokenCurl } = await helpers;
+  const result = parseTokenCurl('curl.exe --location --request=POST `\r\n  --header="Content-Type: application/x-www-form-urlencoded" `\r\n  --data-urlencode="scope=read write" `\r\n  --url=https://auth.example.test/token -k');
+  assert.equal(result.method, 'POST');
+  assert.equal(result.url, 'https://auth.example.test/token');
+  assert.equal(result.headers, 'Content-Type: application/x-www-form-urlencoded');
+  assert.equal(result.body, 'scope=read%20write');
+  assert.equal(result.contentType, 'form');
+  assert.equal(result.securityWarning, true);
 });
 
 test('copied empty-body requests retain their explicit method and content type', async () => {

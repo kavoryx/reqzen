@@ -1,5 +1,8 @@
 function words(command) {
-  const input = command.replace(/\\\r?\n/g, ' ');
+  const input = command
+    .replace(/\\\r?\n/g, ' ')
+    .replace(/`\r?\n/g, ' ')
+    .replace(/\^\r?\n/g, ' ');
   const result = [];
   let word = '';
   let started = false;
@@ -57,23 +60,27 @@ export function parseTokenCurl(command) {
   let json = false;
   let form = false;
   let droppedBearer = false;
+  let securityWarning = false;
   const next = (option, index) => {
     if (index + 1 >= args.length) throw new Error(`${option} needs a value.`);
     return args[index + 1];
   };
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    if (['-X', '--request', '-H', '--header', '-d', '--data', '--data-raw', '--data-binary', '--data-ascii', '--data-urlencode', '--json', '-u', '--user', '--url'].includes(arg)) {
+    const equalsOption = arg.match(/^(--request|--header|--data|--data-raw|--data-binary|--data-ascii|--data-urlencode|--json|--user|--url)=(.*)$/s);
+    if (equalsOption) args.splice(i, 1, equalsOption[1], equalsOption[2]);
+    const option = args[i];
+    if (['-X', '--request', '-H', '--header', '-d', '--data', '--data-raw', '--data-binary', '--data-ascii', '--data-urlencode', '--json', '-u', '--user', '--url'].includes(option)) {
       const value = next(arg, i++);
-      if (arg === '-X' || arg === '--request') method = value.toUpperCase();
-      else if (arg === '--url') {
+      if (option === '-X' || option === '--request') method = value.toUpperCase();
+      else if (option === '--url') {
         if (url) throw new Error('Only one token endpoint can be imported.');
         url = value;
-      } else if (arg === '-u' || arg === '--user') {
+      } else if (option === '-u' || option === '--user') {
         if (!value.includes(':')) throw new Error('The Basic credential must contain a client ID and secret separated by a colon.');
         basic = basicCredential(value);
         auth = 'basic';
-      } else if (arg === '-H' || arg === '--header') {
+      } else if (option === '-H' || option === '--header') {
         const colon = value.indexOf(':');
         if (colon <= 0) throw new Error('Each header must have a name and value separated by a colon.');
         const name = value.slice(0, colon).trim();
@@ -92,19 +99,22 @@ export function parseTokenCurl(command) {
           headers.push(`${name}: ${headerValue}`);
         }
       } else {
-        if (value.startsWith('@') && arg !== '--data-raw') throw new Error('Importing request bodies from files is not supported.');
-        if (data.length && (json || arg === '--json')) throw new Error('Combining --json with other data options is not supported.');
-        if (arg === '--data-urlencode') {
+        if (value.startsWith('@') && option !== '--data-raw') throw new Error('Importing request bodies from files is not supported.');
+        if (data.length && (json || option === '--json')) throw new Error('Combining --json with other data options is not supported.');
+        if (option === '--data-urlencode') {
           if (value.includes('@')) throw new Error('Importing form data from files is not supported.');
           const equal = value.indexOf('=');
           data.push(equal < 0 ? encodeURIComponent(value) : `${value.slice(0, equal)}=${encodeURIComponent(value.slice(equal + 1))}`);
           form = true;
         } else {
           data.push(value);
-          if (arg === '--json') json = true;
+          if (option === '--json') json = true;
         }
       }
-    } else if (['-s', '-S', '-sS', '-Ss', '--silent', '--show-error'].includes(arg)) {
+    } else if (['-s', '-S', '-sS', '-Ss', '-L', '--silent', '--show-error', '--location', '--compressed'].includes(arg)) {
+      continue;
+    } else if (arg === '-k' || arg === '--insecure') {
+      securityWarning = true;
       continue;
     } else if (arg.startsWith('-')) {
       throw new Error(`The curl option ${arg} is not supported. Remove it before importing.`);
@@ -124,7 +134,7 @@ export function parseTokenCurl(command) {
   return {
     url, method, headers: headers.join('\n'), body: data.join('&'),
     contentType: /x-www-form-urlencoded/i.test(contentType) || form || (!contentType && data.length > 0 && !json) ? 'form' : 'json',
-    auth, basic, droppedBearer,
+    auth, basic, droppedBearer, securityWarning,
   };
 }
 
