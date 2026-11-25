@@ -1,8 +1,8 @@
 function words(command) {
   const input = command
-    .replace(/\\\r?\n/g, ' ')
-    .replace(/`\r?\n/g, ' ')
-    .replace(/\^\r?\n/g, ' ');
+    .replace(/[ \t]*\\[ \t]*(?:\r\n|\n|\r)/g, ' ')
+    .replace(/[ \t]*`[ \t]*(?:\r\n|\n|\r)/g, ' ')
+    .replace(/[ \t]*\^[ \t]*(?:\r\n|\n|\r)/g, ' ');
   const result = [];
   let word = '';
   let started = false;
