@@ -1,6 +1,6 @@
 {
   "name": "reqzen-desktop",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "private": true,
   "description": "Reqzen is a local-first, AI-assisted API explorer and REST API client: scan Java, JavaScript/TypeScript, and Python projects or OpenAPI 3 definitions in GitHub repositories, search APIs, plan and test requests, and export Postman collections.",
   "main": "main.js",
