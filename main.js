@@ -1059,9 +1059,12 @@ ipcMain.handle('confirmations:save', (_event, input) => {
   const envId = input && typeof input.environmentId === 'string' ? input.environmentId : '';
   const env = currentView().environments.find((e) => e.environmentId === envId);
   if (!env) return { ok: false, problems: ['That environment is not available.'] };
-  const { problems, value } = confirmations.validate(input && input.methods);
-  if (problems.length > 0) return { ok: false, problems };
   const map = savedConfirmations();
+  const supplied = input && input.methods && typeof input.methods === 'object' ? input.methods : {};
+  const patch = Object.fromEntries(Object.entries(supplied).filter(([method, value]) =>
+    confirmations.METHODS.includes(method) && typeof value === 'boolean'));
+  const { problems, value } = confirmations.validate({ ...confirmations.effective(map, env), ...patch });
+  if (problems.length > 0) return { ok: false, problems };
   confirmations.save(confirmationsFile, { ...map, [envId]: { ...confirmations.effective(map, env), ...value } });
   return { ok: true, environments: confirmationRows() };
 });

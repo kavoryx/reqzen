@@ -757,7 +757,11 @@ function App() {
       desktop.getScanRules(),
     ]);
     const envData = record(envResult);
-    const yours = arrayOf<Environment>(envData.yours).map((environment) => ({ ...environment, yours: true }));
+    const yours = arrayOf<Environment>(envData.yours).map((environment) => ({
+      ...environment,
+      environmentId: environment.environmentId || environment.id,
+      yours: true,
+    }));
     const overrides = record(envData.overrides);
     const hidden = new Set(arrayOf<string>(envData.hidden));
     const builtIns = (snapshot?.environments || [])
@@ -1735,8 +1739,12 @@ function App() {
       const requestedFields = definitions.length
         ? `\n\nRequested custom fields: ${JSON.stringify(definitions)}.`
         : '\n\nSpecify any desired custom field keys and labels when supplying the source or catalog.';
-      await navigator.clipboard.writeText(`${prompt}${requestedFields}`);
-      notify('Prompt copied. Review source or catalog data before sharing it with an external tool.', 'success');
+      const rules = scanRulesText.trim();
+      const scanInstructions = rules
+        ? `\n\nScan rules used to identify APIs:\n\`\`\`json\n${rules}\n\`\`\``
+        : '';
+      await navigator.clipboard.writeText(`${prompt}${scanInstructions}${requestedFields}`);
+      notify('Prompt and scan rules copied. Review source or catalog data before sharing it with an external tool.', 'success');
     } catch (error) {
       notify(`Could not copy the prompt: ${errorMessage(error)}`, 'error');
     }
@@ -2683,6 +2691,8 @@ function Catalog({
   const [servicesCollapsed, setServicesCollapsed] = useState(false);
   const [servicesSide, setServicesSide] = useState<'left' | 'right'>('left');
   const [serviceWidth, setServiceWidth] = useState(220);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const catalogActionsRef = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
     const dismiss = (event: MouseEvent) => {
@@ -2693,6 +2703,17 @@ function Catalog({
   }, []);
   const aiSet = useMemo(() => new Set(aiIds), [aiIds]);
   const visibleFields = customFields.filter((field) => field.visible);
+  const pageCount = Math.max(1, Math.ceil(operations.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const pageOperations = operations.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const pageStart = operations.length ? (currentPage - 1) * pageSize + 1 : 0;
+  const pageEnd = Math.min(currentPage * pageSize, operations.length);
+  useEffect(() => setPage(1), [search, selectedService]);
+  useEffect(() => {
+    if (page > pageCount) setPage(pageCount);
+  }, [page, pageCount]);
+  const visiblePageNumbers = Array.from({ length: pageCount }, (_, index) => index + 1)
+    .filter((number) => number === 1 || number === pageCount || Math.abs(number - currentPage) <= 1);
   const columnsStyle: CSSProperties | undefined = visibleFields.length
     ? { gridTemplateColumns: `62px minmax(160px, 1.2fr) minmax(100px, .8fr) minmax(150px, 1fr) 64px repeat(${visibleFields.length}, minmax(130px, 1fr))`, minWidth: `${700 + visibleFields.length * 140}px` }
     : undefined;
@@ -2759,7 +2780,7 @@ function Catalog({
                 {visibleFields.map((field) => <span key={field.key}>{field.label}</span>)}
               </div>
               <div className="operation-rows">
-              {operations.map((operation) => (
+              {pageOperations.map((operation) => (
                 <button className={`operation-row ${aiSet.has(operation.operationId) ? 'ai-suggested' : ''}`} key={operation.operationId} type="button" style={columnsStyle} onClick={() => onOpenOperation(operation)}>
                   <MethodBadge method={operation.httpMethod} />
                   <span className="operation-path"><code>{operation.pathTemplate}</code>{aiSet.has(operation.operationId) && <span className="ai-badge">AI suggested</span>}</span>
@@ -2770,6 +2791,26 @@ function Catalog({
                 </button>
               ))}
               </div>
+              <nav className="catalog-pagination" aria-label="Catalog pages">
+                <span className="pagination-summary">{pageStart}–{pageEnd} of {operations.length}</span>
+                <label className="pagination-size">Rows
+                  <select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </label>
+                <div className="pagination-controls">
+                  <button type="button" aria-label="Previous page" disabled={currentPage === 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>‹</button>
+                  {visiblePageNumbers.map((number, index) => (
+                    <span className="pagination-page-wrap" key={number}>
+                      {index > 0 && number - visiblePageNumbers[index - 1] > 1 && <span className="pagination-gap" aria-hidden="true">…</span>}
+                      <button type="button" className={number === currentPage ? 'active' : ''} aria-label={`Page ${number}`} aria-current={number === currentPage ? 'page' : undefined} onClick={() => setPage(number)}>{number}</button>
+                    </span>
+                  ))}
+                  <button type="button" aria-label="Next page" disabled={currentPage === pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))}>›</button>
+                </div>
+              </nav>
             </div>
           ) : (
             <div className="empty-list"><span className="empty-icon">⌕</span><h3>No matching APIs</h3><p>Try a different search or select another service.</p></div>
@@ -3184,10 +3225,11 @@ function Settings({
     { id: 'privacy', title: 'Privacy and data', caption: 'Local data and safeguards', icon: '◇' },
   ];
   const methodsRows = (environment: Environment) => {
-    const row = confirmations.find((item) => item.environmentId === environment.environmentId);
+    const environmentId = environment.environmentId || environment.id || '';
+    const row = confirmations.find((item) => item.environmentId === environmentId);
     const settings = record(row?.methods);
     return ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((method) => (
-      <label className="method-confirm" key={method}><input type="checkbox" checked={settings[method] === true} onChange={(event) => onConfirmation(environment.environmentId || environment.id || '', method, event.target.checked)} /><span>{method}</span></label>
+      <label className="method-confirm" key={method}><input type="checkbox" checked={settings[method] === true} onChange={(event) => onConfirmation(environmentId, method, event.target.checked)} /><span>{method}</span></label>
     ));
   };
   return (
@@ -3227,7 +3269,7 @@ function Settings({
                 {environments.length ? environments.map((environment) => (
                   <div className="environment-card" key={environment.id || environment.environmentId}>
                     <div className="environment-card-head"><span className={`environment-avatar ${environment.production ? 'is-prod' : ''}`}>{environment.name.slice(0, 1).toUpperCase()}</span><div className="environment-card-name"><strong>{environment.name}{environment.production && <span className="prod-badge">PROD</span>}</strong><code>{environment.baseUrl}</code><small>{environment.yours ? 'Your environment' : environment.overridden ? 'Snapshot environment · address overridden' : 'From snapshot'}</small></div><div className="environment-card-actions">{environment.yours && <><button type="button" className="text-button" onClick={() => onEditEnvironment(environment)}>Edit</button><button type="button" className="text-button text-danger" onClick={() => onDeleteEnvironment(environment)}>Remove</button></>}</div></div>
-                    <div className="confirmation-settings"><strong>Ask before sending</strong><div>{methodsRows(environment)}</div><small>Production environments should keep confirmations on for write requests.</small></div>
+                    <div className="confirmation-settings"><strong>Ask before sending</strong><div>{methodsRows(environment)}</div><small className={environment.production ? 'confirmation-note is-production' : 'confirmation-note'}>{environment.production ? 'Production safety: keep confirmations on for write requests unless your team accepts the risk.' : 'Confirmations apply before the selected HTTP methods are sent.'}</small></div>
                   </div>
                 )) : <EmptyState title="No environments yet" text="Add a base address to prepare requests. Requests will never be sent automatically." action={<Button onClick={onAddEnvironment}>Add environment</Button>} />}
               </section>
@@ -3299,7 +3341,7 @@ function Settings({
               <div className="scan-secondary-panel">
                 <h3>Use an external AI tool</h3>
                 <p>Copy a prompt to generate a snapshot from source, or export the current catalog and enrich it externally. Save the complete JSON response and import it as a snapshot.</p>
-                <p>Prompts use your saved manual instructions. Snapshot exports can include selected environments, token types, and variables. Review all source and catalog data before sharing.</p>
+                <p>Prompts use your saved manual instructions and the active Scan Rules so an external tool identifies APIs consistently. Snapshot exports can include selected environments, token types, and variables. Review all source and catalog data before sharing.</p>
                 <div className="external-workflows">
                   <div className="external-workflow">
                     <strong>Start from source</strong>
