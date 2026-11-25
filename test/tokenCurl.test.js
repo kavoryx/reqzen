@@ -53,6 +53,21 @@ test('imports common browser curl options and shell continuations', async () => 
   assert.equal(result.securityWarning, true);
 });
 
+test('imports continuations when whitespace surrounds the backslash', async () => {
+  const { parseTokenCurl } = await helpers;
+  const result = parseTokenCurl(
+    'curl -X POST \\  \r\n'
+    + '  --url https://auth.example.test/token \\ \n'
+    + '  --header "Content-Type: application/json" \\ \r\n'
+    + '  --data-raw \'{"grant_type":"client_credentials"}\'',
+  );
+  assert.equal(result.method, 'POST');
+  assert.equal(result.url, 'https://auth.example.test/token');
+  assert.equal(result.headers, 'Content-Type: application/json');
+  assert.equal(result.body, '{"grant_type":"client_credentials"}');
+  assert.equal(result.contentType, 'json');
+});
+
 test('copied empty-body requests retain their explicit method and content type', async () => {
   const { parseTokenCurl, tokenCurl } = await helpers;
   const command = tokenCurl({ method: 'GET', url: 'https://auth.example.test/token', headers: '', body: '', contentType: 'json', auth: 'none', basic: '' });
