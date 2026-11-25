@@ -425,6 +425,8 @@ code, pre, kbd { font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas
 .confirmation-settings > strong { color: var(--muted); font-size: 10px; }
 .confirmation-settings > div { display: flex; gap: 6px; }
 .confirmation-settings > small { width: 100%; color: var(--soft); font-size: 9px; }
+.confirmation-settings .confirmation-note { padding: 6px 8px; border-left: 3px solid var(--accent); border-radius: 4px; background: var(--accent-soft); color: color-mix(in srgb, var(--accent) 78%, var(--text)); }
+.confirmation-settings .confirmation-note.is-production { border-left-color: var(--danger); background: var(--danger-soft); color: color-mix(in srgb, var(--danger) 82%, var(--text)); }
 .method-confirm { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); font-size: 9px; }
 input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--accent); }
 .check-row { display: flex; align-items: flex-start; gap: 9px; margin: 12px 0; color: var(--text); cursor: pointer; font-size: 10px; }
@@ -577,6 +579,16 @@ input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--accent);
 .operation-service { max-width: none; color: var(--muted); }
 .operation-version { justify-self: start; border: 1px solid var(--border); border-radius: 4px; padding: 2px 5px; background: var(--surface-subtle); color: var(--muted); font-size: 9px; font-weight: 650; }
 .ai-badge { flex: 0 0 auto; border-radius: 4px; padding: 2px 4px; background: var(--accent-soft); color: var(--accent); font-size: 8px; font-weight: 850; letter-spacing: .4px; }
+.catalog-pagination { display: flex; min-height: 44px; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 14px; padding: 9px 10px; border: 1px solid var(--border); border-top: 0; border-radius: 0 0 var(--radius-control) var(--radius-control); background: var(--surface); color: var(--muted); font-size: 10px; }
+.pagination-summary { margin-right: auto; }
+.pagination-size { display: flex; align-items: center; gap: 5px; }
+.pagination-size select { min-height: 28px; padding: 3px 6px; border: 1px solid var(--border-strong); border-radius: 5px; background: var(--surface); color: var(--text); font-size: 10px; }
+.pagination-controls, .pagination-page-wrap { display: flex; align-items: center; gap: 3px; }
+.pagination-controls button { display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); color: var(--muted); cursor: pointer; font-size: 11px; }
+.pagination-controls button:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.pagination-controls button.active { border-color: var(--accent); background: var(--accent); color: #fff; font-weight: 750; }
+.pagination-controls button:disabled { cursor: default; opacity: .42; }
+.pagination-gap { padding: 0 2px; color: var(--soft); }
 .token-input-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px; }
 .token-input-row input { min-width: 0; }
 .field-error { color: var(--danger); font-size: 10px; }
@@ -654,6 +666,7 @@ input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--accent);
 .find-bar .button { min-height: 30px; }
 .toast { position: fixed; z-index: 20; top: 64px; right: 20px; display: flex; width: max-content; max-width: min(440px, calc(100vw - 40px)); align-items: center; gap: 9px; padding: 10px 11px; border: 1px solid var(--accent); border-radius: 16px 16px 5px 16px; background: var(--accent-soft); box-shadow: var(--shadow-2); color: var(--text); font-size: 11px; line-height: 1.45; animation: toast-in 180ms ease-out; }
 .toast-success { border-color: color-mix(in srgb, var(--success) 55%, var(--border)); background: var(--success-soft); }.toast-error { border-color: color-mix(in srgb, var(--danger) 55%, var(--border)); background: var(--danger-soft); }.toast-info { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); background: var(--accent-soft); }
+.toast-success .toast-message { color: color-mix(in srgb, var(--success) 72%, var(--text)); }.toast-error .toast-message { color: color-mix(in srgb, var(--danger) 72%, var(--text)); }.toast-info .toast-message { color: color-mix(in srgb, var(--accent) 72%, var(--text)); }
 .toast-icon { display: grid; width: 24px; height: 24px; flex: 0 0 24px; place-items: center; border-radius: 50%; background: var(--accent); color: var(--surface); font-size: 12px; font-weight: 800; }
 .toast-success .toast-icon { background: var(--success); }.toast-error .toast-icon { background: var(--danger); }
 .toast-message { min-width: 0; }

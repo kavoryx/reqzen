@@ -22,6 +22,8 @@ The workspace provides Home, Catalog, Collections, and Settings navigation with 
 
 Status messages appear as semantic, colour-coded balloons at the top right and dismiss automatically; errors remain visible longer and any balloon pauses dismissal while focused or hovered. Documentation generation exposes Stop controls, and stopping aborts the active provider request while preserving completed chunks.
 
+The API Catalog paginates filtered operations with selectable page sizes while keeping search and service filters deterministic. External documentation prompts copy the active source scan rules with the prompt, so another tool applies the same API-identification rules. Source scans derive operation summaries and descriptions from controller doc comments, Python docstrings, handler names, and route facts before optional AI enrichment; they do not require a model call to produce basic documentation.
+
 | Action | macOS | Windows / Linux |
 |---|---|---|
 | Command palette | `⌘K` | `Ctrl+K` |

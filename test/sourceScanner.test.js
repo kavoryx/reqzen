@@ -82,6 +82,40 @@ export class UsersController {
   ]);
 });
 
+test('source scans produce grounded documentation without a separate AI pass', () => {
+  const documentedSpring = `@RestController
+class ItemController {
+  /** Finds an item by its identifier. */
+  @GetMapping("/items/{itemId}")
+  public String getItem(@PathVariable String itemId) { return ""; }
+}`;
+  const documentedSpringResult = scanSource(documentedSpring, {
+    file: 'ItemController.java', serviceName: 'sample', serviceId: 's',
+  });
+  assert.equal(documentedSpringResult.operations[0].summary, 'Finds an item by its identifier.');
+  assert.equal(documentedSpringResult.operations[0].description, 'Finds an item by its identifier.');
+
+  const documentedPython = `from fastapi import FastAPI
+app = FastAPI()
+@app.get("/items/{item_id}")
+async def read_item(item_id: int):
+    """Reads one item from the inventory by ID."""
+    pass
+`;
+  const documentedPythonResult = scanSource(documentedPython, {
+    file: 'routes.py', serviceName: 'sample', serviceId: 's',
+  });
+  assert.equal(documentedPythonResult.operations[0].summary, 'Reads one item from the inventory by ID.');
+  assert.equal(documentedPythonResult.operations[0].description, 'Reads one item from the inventory by ID.');
+
+  const undocumentedExpressResult = scanSource(`const express = require('express');
+const app = express();
+app.post('/items', createItem);
+`, { file: 'server.js', serviceName: 'sample', serviceId: 's' });
+  assert.equal(undocumentedExpressResult.operations[0].summary, 'Create Item');
+  assert.match(undocumentedExpressResult.operations[0].description, /Identified from Express source for POST \/items/);
+});
+
 test('default project scans include common language files but custom rules stay scoped', () => {
   const scanRules = require('../lib/scanRules');
   const exts = sourceExtensions(scanRules.activeRules(scanRules.SPRING));
