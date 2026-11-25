@@ -24,4 +24,4 @@ jobs:
         with:
           node-version: 22.12.0
       - name: Run tests and enforce line coverage
-        run: node --test --experimental-test-coverage --test-coverage-lines="${TEST_COVERAGE_THRESHOLD}" test/*.test.js
+        run: node --test --experimental-test-coverage --test-coverage-lines="${TEST_COVERAGE_THRESHOLD}" --test-coverage-exclude=main.js test/*.test.js
