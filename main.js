@@ -329,6 +329,7 @@ function createWindow() {
 ipcMain.handle('find:run', (event, input) => {
   const text = input && typeof input.text === 'string' ? input.text.slice(0, 200) : '';
   if (text !== '') event.sender.findInPage(text, { findNext: input.findNext === true, forward: input.forward !== false });
+  else event.sender.stopFindInPage('clearSelection');
 });
 
 ipcMain.handle('window:close', (event) => {
@@ -622,10 +623,11 @@ ipcMain.handle('model:status', async () => {
   return ollama.status();
 });
 
-ipcMain.handle('model:list', async () => {
-  if (docProvider() !== 'openai') return { ok: false, problem: 'Choose an OpenAI-compatible provider to list its models.' };
+ipcMain.handle('model:list', async (_event, input) => {
+  const provider = input && ['local', 'openai'].includes(input.provider) ? input.provider : docProvider();
   try {
-    return { ok: true, models: await openaiCompatible.listModels({ ...openaiSettings(), key: activeApiKey() }) };
+    if (provider === 'local') return { ok: true, models: await ollama.listModels({ baseUrl: String(input?.baseUrl || savedDocSettings().baseUrl || '') }) };
+    return { ok: true, models: await openaiCompatible.listModels({ ...openaiCompatible.connection(input || openaiSettings()), key: activeApiKey() }) };
   } catch (e) {
     return { ok: false, problem: e instanceof Error ? e.message : 'The AI server could not list its models.' };
   }

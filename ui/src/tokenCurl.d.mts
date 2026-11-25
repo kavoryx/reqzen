@@ -8,5 +8,5 @@ export interface TokenCurlConfig {
   basic: string;
 }
 
-export function parseTokenCurl(command: string): TokenCurlConfig & { droppedBearer: boolean };
+export function parseTokenCurl(command: string): TokenCurlConfig & { droppedBearer: boolean; securityWarning: boolean };
 export function tokenCurl(config: TokenCurlConfig): string;
