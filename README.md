@@ -1,6 +1,6 @@
-# <img src="website/reqzen-mark.svg" alt="Reqzen logo" width="56" align="middle"> Reqzen — AI API Explorer, Desktop API Client & Postman Alternative
+# <img src="website/reqzen-mark.svg" alt="Reqzen logo" width="56" align="middle"> Reqzen — AI API Explorer, Desktop API Client
 
-Reqzen is a local-first, AI-assisted API explorer and REST API client for developers looking for a Postman alternative. Scan supported Java, JavaScript/TypeScript, and Python API projects—or OpenAPI 3 definitions in GitHub repositories—into a searchable API catalog, then inspect endpoints, prepare requests, and send them only after review.
+Reqzen is a local-first, AI-assisted API explorer and REST API client for developers. Scan supported Java, JavaScript/TypeScript, and Python API projects—or OpenAPI 3 definitions in GitHub repositories—into a searchable API catalog, then inspect endpoints, prepare requests, and send them only after review.
 
 Built for developers onboarding to an existing service, investigating API contracts, or keeping repeatable API requests close to their project. Reqzen runs as a desktop app: no Reqzen account or hosted catalog is required, and core scanning, browsing, and API testing workflows work without AI.
 
@@ -162,7 +162,7 @@ When an API is unfamiliar, the work is scattered: find its routes in source, und
 
 Reqzen is an API source code scanner, searchable API catalog, and desktop API client for developers working with Spring Boot, NestJS, Express-style routes, FastAPI, and Flask. Scan results and generated documentation are starting points for developer review, not a substitute for it.
 
-**Search terms:** AI API explorer, Postman alternative, REST API client, API testing tool, API development, OpenAPI 3, API source code scanner, local-first developer tool, Ollama, Claude, Groq, Spring Boot, NestJS, Express, FastAPI, Flask.
+**Search terms:** AI API explorer, REST API client, API testing tool, API development, OpenAPI 3, API source code scanner, local-first developer tool, Ollama, Claude, Groq, Spring Boot, NestJS, Express, FastAPI, Flask.
 
 ## Platform guides
 
