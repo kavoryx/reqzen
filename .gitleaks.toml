@@ -1,0 +1,11 @@
+[extend]
+useDefault = true
+
+# The curl token importer parses "-u user:password" flags, and its tests use fake credentials.
+[allowlist]
+description = "curl importer source, bundle and test fixtures"
+paths = [
+  '''^ui/src/App\.tsx$''',
+  '''^test/tokenCurl\.test\.js$''',
+  '''^app/renderer/assets/.*\.js$''',
+]
