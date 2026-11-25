@@ -251,7 +251,7 @@ function createWindow() {
       submenu: [
         { role: 'about' },
         { type: 'separator' },
-        { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: () => sendToPage('settings:open') },
+        { label: 'Settings…', click: () => sendToPage('settings:open') },
         { type: 'separator' },
         { role: 'services' },
         { type: 'separator' },
@@ -267,7 +267,7 @@ function createWindow() {
       submenu: [
         { role: 'undo' }, { role: 'redo' }, { type: 'separator' },
         { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }, { type: 'separator' },
-        { label: 'Find…', accelerator: 'CmdOrCtrl+F', click: () => sendToPage('find:open') },
+        { label: 'Find…', click: () => sendToPage('find:open') },
       ],
     },
     {

@@ -9,7 +9,7 @@ import { parseTokenCurl, tokenCurl, type TokenCurlConfig } from './tokenCurl.mjs
 import { combinedSearchScore, rankApiSearch, scoreApiSearch } from './apiSearch.mjs';
 
 type View = 'home' | 'catalog' | 'collections' | 'settings';
-type SettingsSection = 'appearance' | 'environments' | 'variables' | 'tokens' | 'ai' | 'documentation' | 'scan-rules' | 'privacy';
+type SettingsSection = 'appearance' | 'shortcuts' | 'contracts' | 'environments' | 'variables' | 'tokens' | 'ai' | 'documentation' | 'scan-rules' | 'privacy';
 type Severity = 'success' | 'error' | 'info';
 
 interface ApiParameter {
@@ -97,6 +97,9 @@ interface Preferences {
   wrapText: boolean;
   columnWidths: number[] | null;
   textScale: number;
+  shortcuts: Record<ShortcutAction, string>;
+  acceptAllIncompleteContracts: boolean;
+  acceptedIncompleteServices: string[];
 }
 
 interface WorkspaceSnapshot {
@@ -143,10 +146,75 @@ const defaultPreferences: Preferences = {
   wrapText: false,
   columnWidths: null,
   textScale: 100,
+  shortcuts: {
+    command: 'Mod+K',
+    settings: 'Mod+,',
+    find: 'Mod+F',
+    snapshot: 'Mod+O',
+    newRequest: 'Mod+N',
+    send: 'Mod+Enter',
+  },
+  acceptAllIncompleteContracts: false,
+  acceptedIncompleteServices: [],
 };
 
+type ShortcutAction = 'command' | 'settings' | 'find' | 'snapshot' | 'newRequest' | 'send';
 const methods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
-const shortcut = (platform: Platform, key: string) => `${platform === 'mac' ? '⌘' : 'Ctrl+'}${key}`;
+const shortcut = (platform: Platform, value: string) => value.split('+').map((key) =>
+  key === 'Mod' ? (platform === 'mac' ? '⌘' : 'Ctrl')
+    : key === 'Meta' ? (platform === 'mac' ? '⌘' : 'Win')
+      : key === 'Ctrl' ? 'Ctrl'
+        : key === 'Alt' ? (platform === 'mac' ? '⌥' : 'Alt')
+          : key === 'Shift' ? (platform === 'mac' ? '⇧' : 'Shift') : key).join(platform === 'mac' ? ' ' : '+');
+
+function matchesShortcut(event: KeyboardEvent, value: string): boolean {
+  const parts = value.split('+');
+  const key = parts.pop()?.toLowerCase();
+  if (!key || event.key.toLowerCase() !== key) return false;
+  const modifiers = new Set(parts);
+  const mod = event.metaKey || event.ctrlKey;
+  if (event.metaKey !== modifiers.has('Meta') && !modifiers.has('Mod')) return false;
+  if (event.ctrlKey !== modifiers.has('Ctrl') && !modifiers.has('Mod')) return false;
+  if (modifiers.has('Mod') && !mod) return false;
+  if (event.altKey !== modifiers.has('Alt')) return false;
+  if (event.shiftKey !== modifiers.has('Shift')) return false;
+  return true;
+}
+
+function shortcutFromKeyboardEvent(event: KeyboardEvent): string | null {
+  if (['Control', 'Meta', 'Alt', 'Shift'].includes(event.key)) return null;
+  const parts: string[] = [];
+  if ((event.metaKey || event.ctrlKey) && event.metaKey !== event.ctrlKey) parts.push('Mod');
+  else {
+    if (event.metaKey) parts.push('Meta');
+    if (event.ctrlKey) parts.push('Ctrl');
+  }
+  if (event.altKey) parts.push('Alt');
+  if (event.shiftKey) parts.push('Shift');
+  const key = event.key.length === 1 ? event.key.toUpperCase() : event.key;
+  if (!/^(?:[A-Z0-9]|,|Enter)$/.test(key)) return null;
+  parts.push(key);
+  return parts.join('+');
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+function prettyXml(value: string): string | null {
+  const documentNode = new DOMParser().parseFromString(value, 'application/xml');
+  if (documentNode.querySelector('parsererror')) return null;
+  const serialized = new XMLSerializer().serializeToString(documentNode);
+  const compact = serialized.replace(/>\s+</g, '><').trim();
+  const tokens = compact.replace(/(>)(<)(\/*)/g, '$1\n$2$3').split('\n');
+  let depth = 0;
+  return tokens.map((token) => {
+    if (/^<\//.test(token)) depth = Math.max(0, depth - 1);
+    const line = `${'  '.repeat(depth)}${token}`;
+    if (/^<[^!?/][^>]*[^/]?>$/.test(token) && !/^<[^>]+>.*<\/[^>]+>$/.test(token)) depth += 1;
+    return line;
+  }).join('\n');
+}
 
 function isOperation(value: unknown): value is Operation {
   const item = record(value);
@@ -619,6 +687,7 @@ function App() {
   const [aiAvailable, setAiAvailable] = useState(false);
   const [selectedService, setSelectedService] = useState('');
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [noticeClosing, setNoticeClosing] = useState(false);
   const [noticePaused, setNoticePaused] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -711,15 +780,24 @@ function App() {
 
   const notify = useCallback((message: string, severity: Severity = 'info') => {
     setNoticePaused(false);
+    setNoticeClosing(false);
     setNotice({ message, severity });
   }, []);
 
+  const dismissNotice = useCallback(() => {
+    setNoticeClosing(true);
+    window.setTimeout(() => {
+      setNotice(null);
+      setNoticeClosing(false);
+    }, 420);
+  }, []);
+
   useEffect(() => {
-    if (!notice || noticePaused) return;
+    if (!notice || noticePaused || noticeClosing) return;
     const duration = Math.max(notice.severity === 'error' ? 12000 : 6000, Math.min(30000, notice.message.length * 80));
-    const timer = window.setTimeout(() => setNotice(null), duration);
+    const timer = window.setTimeout(dismissNotice, duration);
     return () => window.clearTimeout(timer);
-  }, [notice, noticePaused]);
+  }, [dismissNotice, notice, noticeClosing, noticePaused]);
 
   useEffect(() => {
     if (!docProgressVisible || docJob.state === 'running') return;
@@ -823,7 +901,19 @@ function App() {
           ? saved.columnWidths as number[]
           : null;
         const textScale = typeof saved.textScale === 'number' && Number.isInteger(saved.textScale) && saved.textScale >= 80 && saved.textScale <= 150 && saved.textScale % 10 === 0 ? saved.textScale : 100;
-        setPreferences({ mode, palette, wrapText: saved.wrapText === true, columnWidths, textScale });
+        const savedShortcuts = record(saved.shortcuts);
+        const shortcuts = Object.fromEntries(Object.entries(defaultPreferences.shortcuts).map(([action, fallback]) =>
+          [action, typeof savedShortcuts[action] === 'string' ? String(savedShortcuts[action]) : fallback])) as Record<ShortcutAction, string>;
+        setPreferences({
+          mode,
+          palette,
+          wrapText: saved.wrapText === true,
+          columnWidths,
+          textScale,
+          shortcuts,
+          acceptAllIncompleteContracts: saved.acceptAllIncompleteContracts === true,
+          acceptedIncompleteServices: arrayOf<string>(saved.acceptedIncompleteServices),
+        });
         void desktop.setTextScale(textScale).then((result) => {
           const problem = resultError(result);
           if (problem) throw new Error(problem);
@@ -936,22 +1026,20 @@ function App() {
 
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
-      const key = event.key.toLowerCase();
-      const modifier = event.metaKey || event.ctrlKey;
-      if (modifier && key === 'k') {
+      if (matchesShortcut(event, preferences.shortcuts.command)) {
         event.preventDefault();
         setCommandOpen((open) => !open);
-      } else if (modifier && key === ',') {
+      } else if (matchesShortcut(event, preferences.shortcuts.settings)) {
         event.preventDefault();
-        setView('settings');
-      } else if (modifier && key === 'f') {
+        openSettings('appearance');
+      } else if (matchesShortcut(event, preferences.shortcuts.find)) {
         event.preventDefault();
         setFindOpen(true);
         window.setTimeout(() => document.getElementById('find-input')?.focus(), 0);
-      } else if (modifier && key === 'n') {
+      } else if (matchesShortcut(event, preferences.shortcuts.newRequest)) {
         event.preventDefault();
         setCustomRequestEditor(true);
-      } else if (modifier && key === 'o') {
+      } else if (matchesShortcut(event, preferences.shortcuts.snapshot)) {
         event.preventDefault();
         void desktop.openSnapshot().then((opened) => {
           if (opened) {
@@ -961,7 +1049,7 @@ function App() {
             void refreshWorkspaceSnapshots();
           }
         }).catch((error: unknown) => notify(`The snapshot could not be opened: ${errorMessage(error)}`, 'error'));
-      } else if (modifier && key === 'enter' && selectedOperation) {
+      } else if (matchesShortcut(event, preferences.shortcuts.send) && selectedOperation) {
         event.preventDefault();
         requestSendRef.current?.();
       } else if (event.key === 'Escape') {
@@ -980,7 +1068,7 @@ function App() {
     };
     window.addEventListener('keydown', listener);
     return () => window.removeEventListener('keydown', listener);
-  }, [applySnapshot, commandOpen, confirmationPrompt, desktop, findOpen, notify, overflowOpen, refreshWorkspaceSnapshots, selectedOperation, shortcutsOpen, snapshot]);
+  }, [applySnapshot, commandOpen, confirmationPrompt, desktop, findOpen, notify, overflowOpen, preferences.shortcuts, refreshWorkspaceSnapshots, selectedOperation, shortcutsOpen, snapshot]);
 
   useEffect(() => {
     if (commandOpen) {
@@ -1518,7 +1606,8 @@ function App() {
     setRequestValues({});
     setRequestHeaders('');
     setRequestBody('');
-    setAcceptIncomplete(false);
+    setAcceptIncomplete(preferences.acceptAllIncompleteContracts
+      || preferences.acceptedIncompleteServices.includes(operation.serviceId || operation.serviceName));
     setResponse(null);
   };
 
@@ -1978,8 +2067,8 @@ function App() {
               {aiSearchBusy ? 'AI…' : 'AI'}
             </button>
           )}
-          <button type="button" className="key-hint" onClick={() => setCommandOpen(true)} aria-label={`Open command palette (${shortcut(platform, 'K')})`}>
-            {shortcut(platform, 'K')}
+          <button type="button" className="key-hint" onClick={() => setCommandOpen(true)} aria-label={`Open command palette (${shortcut(platform, preferences.shortcuts.command)})`}>
+            {shortcut(platform, preferences.shortcuts.command)}
           </button>
         </div>
         <div className="topbar-actions no-drag">
@@ -2002,13 +2091,13 @@ function App() {
             <span>{token ? 'Access token ready' : 'Access token'}</span>
             <span aria-hidden="true">{accessTokenOpen ? '⌃' : '⌄'}</span>
           </button>
-          <button className="icon-button" type="button" title={`Settings (${shortcut(platform, ',')})`} onClick={() => openSettings()}>
+          <button className="icon-button" type="button" title={`Settings (${shortcut(platform, preferences.shortcuts.settings)})`} onClick={() => openSettings()}>
             <span aria-hidden="true">⚙</span><span className="sr-only">Settings</span>
           </button>
           <div className="overflow-anchor" ref={overflowRef}>
             <button className="avatar-button" type="button" title="More actions" aria-label="More actions" aria-expanded={overflowOpen} onClick={() => setOverflowOpen((open) => !open)}>•••</button>
             {overflowOpen && <div className="overflow-menu" role="menu">
-              <button type="button" role="menuitem" onClick={() => { setOverflowOpen(false); setCommandOpen(true); }}>Command palette <kbd>{shortcut(platform, 'K')}</kbd></button>
+              <button type="button" role="menuitem" onClick={() => { setOverflowOpen(false); setCommandOpen(true); }}>Command palette <kbd>{shortcut(platform, preferences.shortcuts.command)}</kbd></button>
               <button type="button" role="menuitem" onClick={() => { setOverflowOpen(false); void openSnapshot(); }}>Open snapshot…</button>
               {snapshot && <button type="button" role="menuitem" onClick={() => { setOverflowOpen(false); setSnapshotRemoveId(activeSnapshotId || null); }}>Remove active snapshot…</button>}
               <button type="button" role="menuitem" onClick={() => { setOverflowOpen(false); void beginLocalScan(); }}>Scan local project…</button>
@@ -2163,6 +2252,8 @@ function App() {
               onSection={setSettingsSection}
               preferences={preferences}
               onPreferences={savePreference}
+              services={snapshot?.services || []}
+              incompleteOperations={snapshot?.operations.filter((operation) => operation.schemaComplete === false) || []}
               environments={environments}
               variables={variables}
               confirmations={confirmations}
@@ -2265,7 +2356,7 @@ function App() {
             </span>
           </button>
         )}
-        <div className="status-shortcut">{shortcut(platform, 'K')} Command palette</div>
+        <div className="status-shortcut">{shortcut(platform, preferences.shortcuts.command)} Command palette</div>
       </footer>
 
       {selectedOperation && (
@@ -2291,8 +2382,8 @@ function App() {
           response={response}
           acceptIncomplete={acceptIncomplete}
           onAcceptIncomplete={setAcceptIncomplete}
+          sendShortcut={shortcut(platform, preferences.shortcuts.send)}
           busy={busy}
-          platform={platform}
           isFavourite={!!isFavourite}
           collections={library.collections}
           onFavourite={() => { void toggleFavourite(selectedOperation); }}
@@ -2570,26 +2661,26 @@ function App() {
         </Dialog>
       )}
       {shortcutsOpen && (
-        <Dialog title="Keyboard shortcuts" detail="Use these shortcuts to navigate without leaving the keyboard." onClose={() => setShortcutsOpen(false)}>
+        <Dialog title="Keyboard shortcuts" detail="Your configured shortcuts work throughout Reqzen." onClose={() => setShortcutsOpen(false)}>
           <div className="shortcut-list">
-            <ShortcutRow label="Open command palette" keys={`${shortcut(platform, 'K')}`} />
-            <ShortcutRow label="Open settings" keys={`${shortcut(platform, ',')}`} />
-            <ShortcutRow label="Find in page" keys={`${shortcut(platform, 'F')}`} />
-            <ShortcutRow label="Open snapshot" keys={`${shortcut(platform, 'O')}`} />
-            <ShortcutRow label="New request" keys={`${shortcut(platform, 'N')}`} />
-            <ShortcutRow label="Send current request" keys={`${shortcut(platform, 'Enter')}`} />
+            <ShortcutRow label="Open command palette" keys={shortcut(platform, preferences.shortcuts.command)} />
+            <ShortcutRow label="Open settings" keys={shortcut(platform, preferences.shortcuts.settings)} />
+            <ShortcutRow label="Find in page" keys={shortcut(platform, preferences.shortcuts.find)} />
+            <ShortcutRow label="Open snapshot" keys={shortcut(platform, preferences.shortcuts.snapshot)} />
+            <ShortcutRow label="New request" keys={shortcut(platform, preferences.shortcuts.newRequest)} />
+            <ShortcutRow label="Send current request" keys={shortcut(platform, preferences.shortcuts.send)} />
             <ShortcutRow label="Close the current panel" keys="Esc" />
             <ShortcutRow label="Go back" keys={platform === 'mac' ? '⌥ ←' : 'Alt + ←'} />
           </div>
-          <div className="dialog-actions"><Button variant="primary" onClick={() => setShortcutsOpen(false)}>Done</Button></div>
+          <div className="dialog-actions"><Button onClick={() => { setShortcutsOpen(false); openSettings('shortcuts'); }}>Customize</Button><Button variant="primary" onClick={() => setShortcutsOpen(false)}>Done</Button></div>
         </Dialog>
       )}
 
       {notice && (
-        <div className={`toast toast-${notice.severity}`} role={notice.severity === 'error' ? 'alert' : 'status'} onMouseEnter={() => setNoticePaused(true)} onMouseLeave={() => setNoticePaused(false)} onFocus={() => setNoticePaused(true)} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setNoticePaused(false); }}>
+        <div className={`toast toast-${notice.severity} ${noticeClosing ? 'toast-closing' : ''}`} role={notice.severity === 'error' ? 'alert' : 'status'} onMouseEnter={() => setNoticePaused(true)} onMouseLeave={() => setNoticePaused(false)} onFocus={() => setNoticePaused(true)} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setNoticePaused(false); }}>
           <span className="toast-icon" aria-hidden="true">{notice.severity === 'success' ? '✓' : notice.severity === 'error' ? '!' : 'i'}</span>
           <span className="toast-message">{notice.message}</span>
-          <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss notification">×</button>
+          <button type="button" onClick={dismissNotice} aria-label="Dismiss notification">×</button>
         </div>
       )}
     </div>
@@ -2604,8 +2695,8 @@ function ShortcutRow({ label, keys }: { label: string; keys: string }) {
   return <div className="shortcut-row"><span>{label}</span><kbd>{keys}</kbd></div>;
 }
 
-function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
-  return <label className="field"><span>{label}</span>{children}{hint && <small>{hint}</small>}</label>;
+function Field({ label, children, hint, required = false }: { label: string; children: ReactNode; hint?: string; required?: boolean }) {
+  return <label className="field"><span>{label}{required && <span className="required-asterisk" aria-label="required"> *</span>}</span>{children}{hint && <small>{hint}</small>}</label>;
 }
 
 function Welcome({
@@ -2878,7 +2969,7 @@ function RequestDialog({
   customFields,
   onSaveCustomFields,
   onClose,
-  platform,
+  sendShortcut,
 }: {
   operation: Operation;
   tokenTypes: TokenType[];
@@ -2907,17 +2998,66 @@ function RequestDialog({
   customFields: CustomFieldDefinition[];
   onSaveCustomFields: (values: Record<string, string>) => Promise<boolean>;
   onClose: () => void;
-  platform: Platform;
+  sendShortcut: string;
 }) {
   const environment = environments.find((item) => (item.id || item.environmentId) === activeEnvironmentId);
   const [selectedTokenTypeId, setSelectedTokenTypeId] = useState('');
   const [generatingToken, setGeneratingToken] = useState(false);
   const [tokenStatus, setTokenStatus] = useState('');
+  const [responseView, setResponseView] = useState<'raw' | 'json' | 'xml'>('raw');
   const parameters = operationParameters(operation);
   const bodyMethod = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(operation.httpMethod);
   const requestUrl = routeUrl(operation, environment, Object.fromEntries(parameters.filter((parameter) =>
     parameter.in === 'path').map((parameter) => [parameter.name, values[parameter.name] || `{${parameter.name}}`])));
   const resultProblems = arrayOf<string>(response?.problems);
+  const rawResponse = response
+    ? typeof response.body === 'string' ? response.body : JSON.stringify(response.body ?? response, null, 2)
+    : '';
+  const formattedJson = useMemo(() => {
+    if (!response) return null;
+    try {
+      return JSON.stringify(typeof response.body === 'string' ? JSON.parse(response.body) : response.body ?? response, null, 2);
+    } catch {
+      return null;
+    }
+  }, [response]);
+  const formattedXml = useMemo(() => rawResponse.trim().startsWith('<') ? prettyXml(rawResponse) : null, [rawResponse]);
+  useEffect(() => {
+    setResponseView(formattedJson !== null ? 'json' : formattedXml !== null ? 'xml' : 'raw');
+  }, [formattedJson, formattedXml]);
+  const displayedResponse = responseView === 'json' ? formattedJson || rawResponse
+    : responseView === 'xml' ? formattedXml || rawResponse
+      : rawResponse;
+  const curlCommand = useMemo(() => {
+    const query = new URLSearchParams();
+    for (const parameter of parameters.filter((item) => item.in === 'query' && values[item.name])) {
+      query.set(parameter.name, values[parameter.name]);
+    }
+    const urlWithQuery = `${requestUrl}${query.size > 0 ? `${requestUrl.includes('?') ? '&' : '?'}${query.toString()}` : ''}`;
+    const lines = [`curl -X ${operation.httpMethod} ${shellQuote(urlWithQuery)}`];
+    lines.push(`  -H 'Authorization: Bearer <TOKEN>'`);
+    for (const [name, value] of Object.entries(Object.fromEntries(headers.split(/\r?\n/).map((line) => {
+      const separator = line.indexOf(':');
+      return separator > 0 ? [line.slice(0, separator).trim(), line.slice(separator + 1).trim()] as const : null;
+    }).filter((entry): entry is readonly [string, string] => entry !== null)))) {
+      lines.push(`  -H ${shellQuote(`${name}: ${value}`)}`);
+    }
+    for (const parameter of parameters.filter((item) => item.in === 'header' && values[item.name])) {
+      lines.push(`  -H ${shellQuote(`${parameter.name}: ${values[parameter.name]}`)}`);
+    }
+    if (body.trim()) lines.push(`  --data-raw ${shellQuote(body)}`);
+    return lines.join(' \\\n');
+  }, [body, headers, operation.httpMethod, parameters, requestUrl, values]);
+  const [copyState, setCopyState] = useState<'idle' | 'response' | 'curl'>('idle');
+  const copyText = async (value: string, kind: 'response' | 'curl') => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopyState(kind);
+      window.setTimeout(() => setCopyState('idle'), 1800);
+    } catch {
+      setCopyState('idle');
+    }
+  };
   const generateToken = async () => {
     const tokenType = tokenTypes.find((item) => item.id === selectedTokenTypeId);
     if (!tokenType) return;
@@ -2979,7 +3119,7 @@ function RequestDialog({
         <div className="request-url-row">
           <MethodBadge method={operation.httpMethod} />
           <code>{requestUrl}</code>
-          <Button variant="primary" disabled={busy || !environment} onClick={onSend}>{busy ? 'Sending…' : 'Send'}           <span className="send-shortcut">{shortcut(platform, 'Enter')}</span></Button>
+          <Button variant="primary" disabled={busy || !environment} onClick={onSend}>{busy ? 'Sending…' : 'Send'} <span className="send-shortcut">{sendShortcut}</span></Button>
         </div>
         <div className="request-context"><strong>{operation.summary || operation.pathTemplate}</strong><span>{operation.description || 'Review the inputs below before sending.'}</span></div>
         <div className="request-content">
@@ -2993,8 +3133,8 @@ function RequestDialog({
               </select>
             </Field>
             {parameters.map((parameter) => (
-              <Field key={`${parameter.in}-${parameter.name}`} label={`${parameter.name}${parameter.required ? ' · required' : ''}`} hint={`${parameter.in} parameter${parameter.description ? ` · ${parameter.description}` : ''}`}>
-                <input value={values[parameter.name] || ''} onChange={(event) => onValues({ ...values, [parameter.name]: event.target.value })} placeholder={parameter.schema?.type || 'Enter a value'} />
+              <Field key={`${parameter.in}-${parameter.name}`} label={parameter.name} required={parameter.required === true} hint={`${parameter.in} parameter${parameter.description ? ` · ${parameter.description}` : ''}`}>
+                <input required={parameter.required === true} aria-required={parameter.required === true} value={values[parameter.name] || ''} onChange={(event) => onValues({ ...values, [parameter.name]: event.target.value })} placeholder={parameter.schema?.type || 'Enter a value'} />
               </Field>
             ))}
             <div className="token-generator">
@@ -3033,8 +3173,21 @@ function RequestDialog({
               : response ? (
                 <div className="response-result">
                   {resultProblems.length > 0 && <div className="problem-list">{resultProblems.map((problem) => <p key={problem}>{problem}</p>)}</div>}
+                  <div className="response-toolbar">
+                    <div className="segmented-control compact-segments" role="group" aria-label="Response format">
+                      <button type="button" className={responseView === 'raw' ? 'selected' : ''} onClick={() => setResponseView('raw')}>Raw</button>
+                      <button type="button" disabled={formattedJson === null} className={responseView === 'json' ? 'selected' : ''} onClick={() => setResponseView('json')}>JSON pretty</button>
+                      <button type="button" disabled={formattedXml === null} className={responseView === 'xml' ? 'selected' : ''} onClick={() => setResponseView('xml')}>XML pretty</button>
+                    </div>
+                    <Button type="button" onClick={() => { void copyText(displayedResponse, 'response'); }}>{copyState === 'response' ? 'Copied' : 'Copy response'}</Button>
+                  </div>
                   {typeof response.durationMs === 'number' && <p className="response-meta">{response.durationMs} ms</p>}
-                  <pre>{typeof response.body === 'string' ? response.body : JSON.stringify(response.body || response, null, 2)}</pre>
+                  <pre className="response-body">{displayedResponse}</pre>
+                  <div className="curl-copy-panel">
+                    <div><strong>cURL command</strong><small>Token values are represented as &lt;TOKEN&gt; for safety.</small></div>
+                    <Button type="button" onClick={() => { void copyText(curlCommand, 'curl'); }}>{copyState === 'curl' ? 'Copied' : 'Copy cURL'}</Button>
+                  </div>
+                  <pre className="curl-preview">{curlCommand}</pre>
                 </div>
               ) : <div className="response-placeholder"><span className="response-placeholder-icon">↗</span><strong>Ready when you are</strong><p>Review the request, then select Send.</p></div>}
           </section>
@@ -3160,6 +3313,8 @@ function Settings({
   onSection,
   preferences,
   onPreferences,
+  services,
+  incompleteOperations,
   environments,
   variables,
   confirmations,
@@ -3202,6 +3357,8 @@ function Settings({
   onSection: (section: SettingsSection) => void;
   preferences: Preferences;
   onPreferences: (patch: Partial<Preferences>) => void;
+  services: Service[];
+  incompleteOperations: Operation[];
   environments: Environment[];
   variables: Variable[];
   confirmations: Array<Record<string, unknown>>;
@@ -3294,6 +3451,8 @@ function Settings({
   }, [section, provider, providerBaseUrl]);
   const nav: Array<{ id: SettingsSection; title: string; caption: string; icon: string }> = [
     { id: 'appearance', title: 'Appearance', caption: 'Theme and accent', icon: '◐' },
+    { id: 'shortcuts', title: 'Keyboard shortcuts', caption: 'Customize key commands', icon: '⌘' },
+    { id: 'contracts', title: 'API contracts', caption: 'Incomplete contract approval', icon: '✓' },
     { id: 'environments', title: 'Environments', caption: 'Hosts and confirmations', icon: '◎' },
     { id: 'variables', title: 'Variables', caption: 'Reusable values', icon: '⌗' },
     { id: 'tokens', title: 'Token types', caption: 'Authentication setups', icon: '◈' },
@@ -3337,6 +3496,84 @@ function Settings({
                   <Button type="button" aria-label="Increase text size" disabled={preferences.textScale >= 150} onClick={() => onPreferences({ textScale: preferences.textScale + 10 })}>A＋</Button>
                   <Button type="button" onClick={() => onPreferences({ textScale: 100 })} disabled={preferences.textScale === 100}>Reset</Button>
                 </div>
+              </div>
+            </section>
+          )}
+          {section === 'shortcuts' && (
+            <section className="settings-card">
+              <div className="card-title-row"><div><h2>Keyboard shortcuts</h2><p>Select a command and press a new key combination.</p></div><Button onClick={() => onPreferences({ shortcuts: { ...defaultPreferences.shortcuts } })}>Reset defaults</Button></div>
+              <div className="shortcut-editor">
+                {([
+                  ['command', 'Open command palette'],
+                  ['settings', 'Open settings'],
+                  ['find', 'Find in page'],
+                  ['snapshot', 'Open snapshot'],
+                  ['newRequest', 'New request'],
+                  ['send', 'Send current request'],
+                ] as const).map(([action, label]) => (
+                  <label className="shortcut-editor-row" key={action}>
+                    <span>{label}</span>
+                    <input
+                      readOnly
+                      value={shortcut(window.desktop.platform, preferences.shortcuts[action])}
+                      aria-label={`${label} shortcut`}
+                      onKeyDown={(event) => {
+                        event.preventDefault();
+                        const value = shortcutFromKeyboardEvent(event.nativeEvent);
+                        if (!value) return;
+                        const duplicate = (Object.entries(preferences.shortcuts) as Array<[ShortcutAction, string]>)
+                          .some(([other, shortcutValue]) => other !== action && shortcutValue === value);
+                        if (duplicate) {
+                          event.currentTarget.setCustomValidity('That shortcut is already assigned.');
+                          event.currentTarget.reportValidity();
+                          return;
+                        }
+                        event.currentTarget.setCustomValidity('');
+                        onPreferences({ shortcuts: { ...preferences.shortcuts, [action]: value } });
+                      }}
+                    />
+                  </label>
+                ))}
+              </div>
+              <div className="privacy-note">Use a letter, number, comma, or Enter with optional Ctrl, Command, Alt, or Shift. Escape remains reserved for closing panels.</div>
+            </section>
+          )}
+          {section === 'contracts' && (
+            <section className="settings-card">
+              <div className="card-title-row"><div><h2>Incomplete API contracts</h2><p>Approve all services at once, or choose only the services you trust.</p></div></div>
+              <label className="check-row contract-all-row">
+                <input
+                  type="checkbox"
+                  checked={preferences.acceptAllIncompleteContracts}
+                  onChange={(event) => onPreferences({
+                    acceptAllIncompleteContracts: event.target.checked,
+                    acceptedIncompleteServices: event.target.checked ? [] : preferences.acceptedIncompleteServices,
+                  })}
+                />
+                <span><strong>Approve incomplete contracts for all APIs</strong><small>This approval still verifies enabled environments, required parameters, and request destinations.</small></span>
+              </label>
+              <div className="contract-service-list">
+                {services.map((service) => {
+                  const incompleteCount = incompleteOperations.filter((operation) =>
+                    operation.serviceId === service.serviceId || operation.serviceName === service.name).length;
+                  const key = service.serviceId || service.name;
+                  return (
+                    <label className="contract-service-row" key={key}>
+                      <input
+                        type="checkbox"
+                        disabled={preferences.acceptAllIncompleteContracts}
+                        checked={preferences.acceptAllIncompleteContracts || preferences.acceptedIncompleteServices.includes(key)}
+                        onChange={(event) => onPreferences({
+                          acceptedIncompleteServices: event.target.checked
+                            ? [...new Set([...preferences.acceptedIncompleteServices, key])]
+                            : preferences.acceptedIncompleteServices.filter((value) => value !== key),
+                        })}
+                      />
+                      <span><strong>{service.name}</strong><small>{incompleteCount ? `${incompleteCount} API${incompleteCount === 1 ? '' : 's'} with an incomplete contract` : 'Contract complete'}</small></span>
+                    </label>
+                  );
+                })}
+                {services.length === 0 && <EmptyState title="No services loaded" text="Open or scan an API catalog to manage service approvals." />}
               </div>
             </section>
           )}

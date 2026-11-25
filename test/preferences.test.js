@@ -6,8 +6,8 @@ const path = require('path');
 const prefs = require('../lib/preferences');
 
 test('unknown values fall back to the defaults', () => {
-  assert.deepEqual(prefs.sanitize({ mode: 'neon', palette: 'teal' }), { mode: 'system', palette: 'teal', wrapText: false, columnWidths: null, textScale: 100 });
-  assert.deepEqual(prefs.sanitize(null), { mode: 'system', palette: 'blue', wrapText: false, columnWidths: null, textScale: 100 });
+  assert.deepEqual(prefs.sanitize({ mode: 'neon', palette: 'teal' }), { mode: 'system', palette: 'teal', wrapText: false, columnWidths: null, textScale: 100, shortcuts: prefs.SHORTCUTS, acceptAllIncompleteContracts: false, acceptedIncompleteServices: [] });
+  assert.deepEqual(prefs.sanitize(null), prefs.DEFAULTS);
 });
 
 test('a missing or damaged file loads as the defaults, and a saved choice round-trips', () => {
@@ -17,7 +17,7 @@ test('a missing or damaged file loads as the defaults, and a saved choice round-
   fs.writeFileSync(file, '{oops');
   assert.deepEqual(prefs.load(file), prefs.DEFAULTS);
   prefs.save(file, { mode: 'dark', palette: 'violet', textScale: 130 });
-  assert.deepEqual(prefs.load(file), { mode: 'dark', palette: 'violet', wrapText: false, columnWidths: null, textScale: 130 });
+  assert.deepEqual(prefs.load(file), { mode: 'dark', palette: 'violet', wrapText: false, columnWidths: null, textScale: 130, shortcuts: prefs.SHORTCUTS, acceptAllIncompleteContracts: false, acceptedIncompleteServices: [] });
 });
 
 test('text size accepts only supported increments and bounds', () => {
@@ -31,4 +31,17 @@ test('wrap text and column widths are kept only when they are valid', () => {
   assert.deepEqual(prefs.sanitize({ columnWidths: [120, 400, 200, 260, 90] }).columnWidths, [120, 400, 200, 260, 90]);
   assert.equal(prefs.sanitize({ columnWidths: [120, 400] }).columnWidths, null, 'the wrong number of columns is refused');
   assert.equal(prefs.sanitize({ columnWidths: [120, 5000, 200, 260, 90] }).columnWidths, null, 'a width out of range is refused');
+});
+
+test('shortcut and contract approval preferences are sanitized', () => {
+  const value = prefs.sanitize({
+    shortcuts: { command: 'Ctrl+Shift+P', send: 'Ctrl+Ctrl+Enter', find: 'totally-invalid' },
+    acceptAllIncompleteContracts: true,
+    acceptedIncompleteServices: ['Orders', '', 'Orders', 3],
+  });
+  assert.equal(value.shortcuts.command, 'Ctrl+Shift+P');
+  assert.equal(value.shortcuts.send, prefs.SHORTCUTS.send);
+  assert.equal(value.shortcuts.find, prefs.SHORTCUTS.find);
+  assert.equal(value.acceptAllIncompleteContracts, true);
+  assert.deepEqual(value.acceptedIncompleteServices, ['Orders']);
 });
