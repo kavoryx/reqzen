@@ -643,6 +643,16 @@ input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--accent);
 .response-placeholder strong { color: var(--text); font-size: 11px; }
 .response-placeholder p { margin: 5px 0; font-size: 10px; }
 .response-result pre { max-height: 55vh; overflow: auto; margin: 9px 0 0; padding: 12px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--text); font-size: 10px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.response-toolbar, .curl-copy-panel { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.response-toolbar { flex-wrap: wrap; margin-bottom: 8px; }
+.compact-segments { display: inline-flex; }
+.compact-segments button { min-height: 28px; padding: 0 9px; font-size: 9px; }
+.compact-segments button:disabled { cursor: not-allowed; opacity: .45; }
+.curl-copy-panel { margin-top: 14px; }
+.curl-copy-panel > div { display: grid; gap: 2px; }
+.curl-copy-panel strong { font-size: 10px; }
+.curl-copy-panel small { color: var(--muted); font-size: 8px; }
+.response-result pre.curl-preview { max-height: 170px; color: var(--muted); }
 .response-meta { color: var(--muted); font-size: 9px; }
 .problem-list { padding: 8px 10px; border-radius: 6px; background: var(--danger-soft); color: var(--danger); font-size: 10px; line-height: 1.55; }
 .problem-list p { margin: 2px 0; }
@@ -664,12 +674,24 @@ input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--accent);
 .shortcut-list { display: flex; flex-direction: column; }
 .shortcut-row { display: flex; min-height: 37px; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 11px; }
 .shortcut-row kbd { padding: 3px 6px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface-subtle); color: var(--text); font-size: 9px; }
+.shortcut-editor { display: flex; flex-direction: column; margin-top: 12px; }
+.shortcut-editor-row { display: flex; min-height: 48px; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--border); font-size: 11px; }
+.shortcut-editor-row input { width: 190px; min-height: 32px; padding: 5px 9px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface-subtle); color: var(--text); cursor: pointer; text-align: center; }
+.contract-all-row { margin: 14px 0; }
+.contract-service-list { display: flex; flex-direction: column; margin-top: 12px; overflow: hidden; border: 1px solid var(--border); border-radius: 8px; }
+.contract-service-row { display: flex; align-items: center; gap: 10px; min-height: 54px; padding: 9px 12px; border-bottom: 1px solid var(--border); background: var(--surface-subtle); cursor: pointer; }
+.contract-service-row:last-child { border-bottom: 0; }
+.contract-service-row > span { display: grid; gap: 3px; }
+.contract-service-row strong { font-size: 11px; }
+.contract-service-row small { color: var(--muted); font-size: 9px; }
+.required-asterisk { color: var(--danger); font-weight: 800; }
 .find-bar { position: fixed; z-index: 6; top: 64px; right: 18px; display: flex; align-items: center; gap: 8px; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow-2); }
 .find-bar label { color: var(--muted); font-size: 10px; }
 .find-bar input { width: 190px; min-height: 30px; padding: 5px 8px; border: 1px solid var(--border-strong); border-radius: 5px; background: var(--surface); color: var(--text); }
 .find-match { min-width: 62px; color: var(--muted); font-size: 10px; text-align: center; }
 .find-bar .button { min-height: 30px; }
 .toast { position: fixed; z-index: 20; top: 64px; right: 20px; display: flex; width: max-content; max-width: min(440px, calc(100vw - 40px)); align-items: center; gap: 9px; padding: 10px 11px; border: 1px solid var(--accent); border-radius: 16px 16px 5px 16px; background: var(--accent-soft); box-shadow: var(--shadow-2); color: var(--text); font-size: 11px; line-height: 1.45; animation: toast-in 180ms ease-out; }
+.toast-closing { pointer-events: none; animation: toast-out 420ms cubic-bezier(.4, 0, 1, 1) forwards; }
 .toast-success { border-color: color-mix(in srgb, var(--success) 55%, var(--border)); background: var(--success-soft); }.toast-error { border-color: color-mix(in srgb, var(--danger) 55%, var(--border)); background: var(--danger-soft); }.toast-info { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); background: var(--accent-soft); }
 .toast-success .toast-message { color: color-mix(in srgb, var(--success) 72%, var(--text)); }.toast-error .toast-message { color: color-mix(in srgb, var(--danger) 72%, var(--text)); }.toast-info .toast-message { color: color-mix(in srgb, var(--accent) 72%, var(--text)); }
 .toast-icon { display: grid; width: 24px; height: 24px; flex: 0 0 24px; place-items: center; border-radius: 50%; background: var(--accent); color: var(--surface); font-size: 12px; font-weight: 800; }
@@ -684,6 +706,7 @@ input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--accent);
 @keyframes dialog-in { from { opacity: 0; transform: translateY(4px) scale(.99); } to { opacity: 1; transform: none; } }
 @keyframes slide-in { from { opacity: .82; transform: translateX(10px); } to { opacity: 1; transform: none; } }
 @keyframes toast-in { from { opacity: 0; transform: translateY(-8px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes toast-out { from { opacity: 1; transform: translateX(0); } 70% { opacity: .65; } to { opacity: 0; transform: translateX(calc(100% + 24px)); } }
 
 @media (max-width: 1200px) {
   .topbar { gap: 12px; }
