@@ -18,7 +18,9 @@ Electron loads the source-built renderer from `app/renderer/`.
 
 ## Navigation and shortcuts
 
-The workspace provides Catalog, Collections, and Settings navigation with the active section clearly marked. API search is available from the toolbar; the command palette finds operations, settings, and environments.
+The workspace provides Home, Catalog, Collections, and Settings navigation with the active section clearly marked. Home is available from the brand button and sidebar, including when a saved catalog is active. API search is available from the toolbar; the command palette finds views, operations, settings, and environments.
+
+Status messages appear as semantic, colour-coded balloons at the top right and dismiss automatically; errors remain visible longer and any balloon pauses dismissal while focused or hovered. Documentation generation exposes Stop controls, and stopping aborts the active provider request while preserving completed chunks.
 
 | Action | macOS | Windows / Linux |
 |---|---|---|

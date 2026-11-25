@@ -637,29 +637,29 @@ const generateAfterScanSaved = () => savedDocSettings().generateAfterScan !== fa
 
 // The background run started after a scan. One run at a time; the page polls its status.
 let docJob = { state: 'idle' };
-let docJobStop = false;
+let docAbortController = null;
 
 const usableOperation = (o) => ({
   revisionId: o.revisionId, httpMethod: o.httpMethod, pathTemplate: o.pathTemplate, serviceName: o.serviceName,
   summary: o.summary, description: o.description, contractVersion: o.contractVersion, lifecycleStatus: o.lifecycleStatus, visibility: o.visibility, definition: o.definition,
 });
 
-function docChat() {
+function docChat(signal) {
   const provider = docProvider();
   if (provider === 'claude') {
     const key = providerApiKeys.claude;
-    return { source: 'claude', chat: (s, u) => claudeApi.chatJson(s, u, { key }) };
+    return { source: 'claude', chat: (s, u) => claudeApi.chatJson(s, u, { key, signal }) };
   }
   if (provider === 'openai') {
     const settings = openaiSettings();
     const key = providerApiKeys.openai;
     return {
       source: 'openai',
-      chat: (s, u) => openaiCompatible.chatJson(s, u, { ...settings, key }, 180000),
+      chat: (s, u) => openaiCompatible.chatJson(s, u, { ...settings, key, signal }, 180000),
     };
   }
   // A local model on a laptop can be slow, so it gets longer than the default before a call is counted as failed.
-  return { source: 'local', chat: (s, u) => ollama.chatJson(s, u, 180000) };
+  return { source: 'local', chat: (s, u) => ollama.chatJson(s, u, 180000, signal) };
 }
 
 /** Whether a model is ready to write descriptions, with the reason when it is not. */
@@ -691,17 +691,27 @@ async function afterScanDocs(text, flag) {
   const ops = (snapshot.operations || []).filter((o) => docJobNeeds(o, docs)).map(usableOperation);
   if (ops.length === 0) return { status: 'done', total: 0, reason: 'Every API already has a description.' };
   aiRedaction.registerSensitiveValues(ops);
-  const { source, chat } = ready.ok ? docChat() : { source: 'template', chat: async () => '' };
   const reason = ready.ok ? '' : `AI is unavailable. Creating factual documentation from the API contract. ${ready.reason || ''}`.trim();
-  docJobStop = false;
+  const controller = new AbortController();
+  docAbortController = controller;
+  const { source, chat } = ready.ok ? docChat(controller.signal) : { source: 'template', chat: async () => '' };
   docJob = { state: 'running', total: ops.length, done: 0, fromModel: 0, factual: 0, reason };
   runDocumentation({
     operations: ops, chat, source, instructions: docInstructions('auto'),
     save: (results) => docAgent.merge(docsFile, results),
-    shouldStop: () => docJobStop,
-    onProgress: (status) => { docJob = { ...docJob, ...status, reason: status.reason || docJob.reason || '' }; },
-  }).then((status) => { docJob = { ...docJob, ...status, reason: status.reason || docJob.reason || '' }; })
-    .catch((e) => { docJob = { ...docJob, state: 'failed', reason: String(e && e.message ? e.message : 'The run failed.') }; });
+    shouldStop: () => controller.signal.aborted,
+    onProgress: (status) => {
+      if (docAbortController === controller) docJob = { ...docJob, ...status, reason: status.reason || docJob.reason || '' };
+    },
+  }).then((status) => {
+    if (docAbortController !== controller) return;
+    docJob = { ...docJob, ...status, reason: status.reason || docJob.reason || '' };
+    docAbortController = null;
+  }).catch((e) => {
+    if (docAbortController !== controller) return;
+    docJob = { ...docJob, state: controller.signal.aborted ? 'stopped' : 'failed', reason: controller.signal.aborted ? 'Stopped by user.' : String(e && e.message ? e.message : 'The run failed.') };
+    docAbortController = null;
+  });
   return { status: 'started', total: ops.length, factualFallback: !ready.ok, reason };
 }
 
@@ -772,7 +782,9 @@ ipcMain.handle('docs:key', (_event, input) => {
 // The background run's status, for the page to show progress.
 ipcMain.handle('docs:job', () => docJob);
 ipcMain.handle('docs:jobStop', () => {
-  docJobStop = true;
+  if (docJob.state !== 'running') return docJob;
+  docAbortController?.abort();
+  docJob = { ...docJob, state: 'stopped', reason: 'Stopped by user.' };
   return docJob;
 });
 
@@ -785,10 +797,11 @@ ipcMain.handle('docs:generate', async (_event, input) => {
   if (usable.length === 0) return { ok: false, problem: 'No APIs to describe.' };
   aiRedaction.registerSensitiveValues(usable);
   const ready = await modelReady();
-  const model = ready.ok ? docChat() : { source: 'template', chat: async () => '' };
-  const { source, chat } = model;
-  docJobStop = false;
   const fallbackReason = ready.ok ? '' : 'The AI provider is unavailable, so Reqzen is creating factual documentation from the API contract.';
+  const controller = new AbortController();
+  docAbortController = controller;
+  const model = ready.ok ? docChat(controller.signal) : { source: 'template', chat: async () => '' };
+  const { source, chat } = model;
   docJob = { state: 'running', total: usable.length, done: 0, fromModel: 0, factual: 0, reason: fallbackReason };
   runDocumentation({
     operations: usable,
@@ -796,10 +809,19 @@ ipcMain.handle('docs:generate', async (_event, input) => {
     source,
     instructions: docInstructions('manual'),
     save: (results) => docAgent.merge(docsFile, results),
-    shouldStop: () => docJobStop,
-    onProgress: (status) => { docJob = { ...docJob, ...status }; },
-  }).then((status) => { docJob = { ...docJob, ...status }; })
-    .catch((e) => { docJob = { ...docJob, state: 'failed', reason: String(e && e.message ? e.message : 'The run failed.') }; });
+    shouldStop: () => controller.signal.aborted,
+    onProgress: (status) => {
+      if (docAbortController === controller) docJob = { ...docJob, ...status };
+    },
+  }).then((status) => {
+    if (docAbortController !== controller) return;
+    docJob = { ...docJob, ...status };
+    docAbortController = null;
+  }).catch((e) => {
+    if (docAbortController !== controller) return;
+    docJob = { ...docJob, state: controller.signal.aborted ? 'stopped' : 'failed', reason: controller.signal.aborted ? 'Stopped by user.' : String(e && e.message ? e.message : 'The run failed.') };
+    docAbortController = null;
+  });
   return { ok: true, started: true, total: usable.length, factualFallback: !ready.ok, reason: fallbackReason };
 });
 

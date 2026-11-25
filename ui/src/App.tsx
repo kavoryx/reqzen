@@ -729,7 +729,7 @@ function App() {
     return () => window.clearTimeout(timer);
   }, [globalTokenStatus, globalTokenBusy]);
 
-  const applySnapshot = useCallback((text: string, name: string, id = '') => {
+  const applySnapshot = useCallback((text: string, name: string, id = '', navigate = true) => {
     const parsed = parseSnapshot(text);
     setSnapshot(parsed);
     setSnapshotName(name);
@@ -737,7 +737,7 @@ function App() {
     setSelectedService(parsed.services[0]?.serviceId || '');
     setSelectedOperation(null);
     setAiSearchIds([]);
-    setView('catalog');
+    if (navigate) setView('catalog');
   }, []);
 
   const refreshWorkspaceSnapshots = useCallback(async () => {
@@ -829,7 +829,7 @@ function App() {
         void desktop.setWindowAppearance(mode).catch((error: unknown) =>
           notify(`Could not update the window appearance: ${errorMessage(error)}`, 'error'));
         setDocsSettings(record(docsResult));
-        if (lastSnapshot) applySnapshot(lastSnapshot.text, lastSnapshot.name, lastSnapshot.id);
+        if (lastSnapshot) applySnapshot(lastSnapshot.text, lastSnapshot.name, lastSnapshot.id, false);
       })
       .catch((error: unknown) => notify(`Could not load saved app data: ${errorMessage(error)}`, 'error'))
       .finally(() => {
@@ -958,7 +958,7 @@ function App() {
         else if (shortcutsOpen) setShortcutsOpen(false);
       } else if (event.altKey && event.key === 'ArrowLeft') {
         event.preventDefault();
-        setView(snapshot ? 'catalog' : 'home');
+        setView('home');
       }
     };
     window.addEventListener('keydown', listener);
@@ -1196,6 +1196,18 @@ function App() {
       notify(`The snapshot could not be opened: ${errorMessage(error)}`, 'error');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const stopDocumentation = async () => {
+    setDocJob((current) => ({ ...current, state: 'stopped', reason: 'Stopped by user.' }));
+    setDocProgressVisible(true);
+    try {
+      const result = record(await desktop.stopDocJob());
+      setDocJob(result);
+      notify('Documentation generation stopped.', 'info');
+    } catch (error) {
+      notify(`Documentation could not be stopped: ${errorMessage(error)}`, 'error');
     }
   };
 
@@ -1862,8 +1874,8 @@ function App() {
   const commandResults = useMemo(() => {
     const query = commandQuery.trim().toLowerCase();
     const rows = [
-      ...(['Catalog', 'Collections', 'Settings'] as const).map((label) => ({ label, action: () => {
-        setView(label === 'Catalog' ? 'catalog' : label === 'Collections' ? 'collections' : 'settings');
+      ...(['Home', 'Catalog', 'Collections', 'Settings'] as const).map((label) => ({ label, action: () => {
+        setView(label === 'Home' ? 'home' : label === 'Catalog' ? 'catalog' : label === 'Collections' ? 'collections' : 'settings');
         setCommandOpen(false);
       } })),
       ...environments.map((environment) => ({ label: `Switch environment · ${environment.name}`, action: () => {
@@ -1908,7 +1920,7 @@ function App() {
   return (
     <div className="app-frame">
       <header className="topbar">
-        <button className="brand no-drag" type="button" onClick={() => setView(snapshot ? 'catalog' : 'home')} aria-label="Reqzen home">
+        <button className="brand no-drag" type="button" onClick={() => setView('home')} aria-label="Reqzen home">
           <span className="brand-mark">R</span><span>Reqzen</span>
         </button>
         <div className="toolbar-search no-drag">
@@ -2019,6 +2031,7 @@ function App() {
           <aside className="sidebar" aria-label="Main navigation">
             <div className="sidebar-group">
               <p className="sidebar-label"><span>Workspace</span><span className="sidebar-controls"><button type="button" aria-label={`Move workspace to ${workspaceSide === 'left' ? 'right' : 'left'}`} onClick={() => setWorkspaceSide((side) => side === 'left' ? 'right' : 'left')}>⇄</button><button type="button" aria-label="Collapse workspace" onClick={() => setWorkspaceCollapsed(true)}>‹</button></span></p>
+              <NavButton active={false} onClick={() => setView('home')} icon="⌂">Home</NavButton>
               <NavButton active={view === 'catalog'} onClick={() => setView('catalog')} icon="◫">Catalog</NavButton>
               <NavButton active={view === 'collections'} onClick={() => setView('collections')} icon="▤">Collections</NavButton>
             </div>
@@ -2068,6 +2081,7 @@ function App() {
               onGithubScan={openGithubScan}
               onNewRequest={() => setCustomRequestEditor(true)}
               onSettings={() => openSettings()}
+              onContinue={() => setView('catalog')}
               recentName={snapshotName}
               hasSnapshot={!!snapshot}
             />
@@ -2180,7 +2194,7 @@ function App() {
                   setBusy(false);
                 }
               }}
-              onStopDocs={() => { void desktop.stopDocJob().then(() => setDocJob({ state: 'stopped' })).catch((error: unknown) => notify(errorMessage(error), 'error')); }}
+              onStopDocs={() => { void stopDocumentation(); }}
               onGenerateDocs={() => {
                 void generateDocumentation(snapshot?.operations || []);
               }}
@@ -2205,6 +2219,7 @@ function App() {
             <small>{String(docJob.reason || (docJob.state === 'running' ? 'Descriptions are being generated in the background.' : 'Open documentation settings to review the result.'))}</small>
           </div>
           <button type="button" className="text-button" onClick={() => openSettings('documentation')}>View</button>
+          {docJob.state === 'running' && <button type="button" className="text-button" onClick={() => { void stopDocumentation(); }}>Stop</button>}
           <button type="button" className="icon-button" aria-label="Dismiss documentation progress" onClick={() => setDocProgressVisible(false)}>×</button>
         </aside>
       )}
@@ -2539,7 +2554,9 @@ function App() {
 
       {notice && (
         <div className={`toast toast-${notice.severity}`} role={notice.severity === 'error' ? 'alert' : 'status'} onMouseEnter={() => setNoticePaused(true)} onMouseLeave={() => setNoticePaused(false)} onFocus={() => setNoticePaused(true)} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setNoticePaused(false); }}>
-          <span>{notice.message}</span><button type="button" onClick={() => setNotice(null)} aria-label="Dismiss notification">×</button>
+          <span className="toast-icon" aria-hidden="true">{notice.severity === 'success' ? '✓' : notice.severity === 'error' ? '!' : 'i'}</span>
+          <span className="toast-message">{notice.message}</span>
+          <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss notification">×</button>
         </div>
       )}
     </div>
@@ -2565,6 +2582,7 @@ function Welcome({
   onGithubScan,
   onNewRequest,
   onSettings,
+  onContinue,
   recentName,
   hasSnapshot,
 }: {
@@ -2574,6 +2592,7 @@ function Welcome({
   onGithubScan: () => void;
   onNewRequest: () => void;
   onSettings: () => void;
+  onContinue: () => void;
   recentName: string;
   hasSnapshot: boolean;
 }) {
@@ -2588,7 +2607,7 @@ function Welcome({
           <span><b>✓</b> Local-first</span><span><b>✓</b> No account</span><span><b>✓</b> Review before send</span>
         </div>
         {hasSnapshot && recentName && (
-          <button className="recent-card" type="button" onClick={onOpenSnapshot}>
+          <button className="recent-card" type="button" onClick={onContinue}>
             <span className="recent-icon">◫</span><span><strong>Continue where you left off</strong><small>{recentName}</small></span><b aria-hidden="true">→</b>
           </button>
         )}

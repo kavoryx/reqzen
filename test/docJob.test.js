@@ -39,6 +39,30 @@ test('a stop request keeps the chunks already saved', async () => {
   assert.equal(saved.length, 10, 'only the first chunk was written');
 });
 
+test('a stop request during a model call discards the unfinished chunk', async () => {
+  let stop = false;
+  let finish;
+  const saved = [];
+  const started = new Promise((resolve) => {
+    finish = resolve;
+  });
+  const running = job.runDocumentation({
+    operations: [op('in-flight')],
+    chat: () => started,
+    source: 'local',
+    instructions: '',
+    save: (results) => saved.push(...results),
+    shouldStop: () => stop,
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  stop = true;
+  finish('{"description":"Returns an item for the requested identifier."}');
+  const status = await running;
+  assert.equal(status.state, 'stopped');
+  assert.equal(status.done, 0);
+  assert.equal(saved.length, 0);
+});
+
 test('a model that fails a whole chunk stops the run, and the failure is reported', async () => {
   const ops = Array.from({ length: 30 }, (_, i) => op(`f${i}`));
   let calls = 0;
