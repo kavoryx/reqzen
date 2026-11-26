@@ -6,6 +6,7 @@ const ACTIONS = {
   delete: ['DELETE'], remove: ['DELETE'],
 };
 const METHOD_NAMES = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
+const IDENTIFIER_VALUES = /\b(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|[0-9a-z]+[0-9][0-9a-z_-]{15,})\b/gi;
 
 function stem(word) {
   if (word.length > 4 && word.endsWith('ies')) return `${word.slice(0, -3)}y`;
@@ -19,7 +20,7 @@ function words(value) {
 
 function parsedQuery(query) {
   const version = String(query).match(/\bv(\d+(?:\.\d+)*)\b/i)?.[1] || '';
-  const raw = words(String(query).replace(/\bv\d+(?:\.\d+)*\b/gi, ' '));
+  const raw = words(String(query).replace(IDENTIFIER_VALUES, ' ').replace(/\bv\d+(?:\.\d+)*\b/gi, ' '));
   const explicitMethod = String(query).toUpperCase().match(/\b(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b/)?.[1];
   const action = raw.find((term) => ACTIONS[term]);
   const methods = explicitMethod ? [explicitMethod] : (ACTIONS[action] || []);
@@ -71,4 +72,29 @@ export function rankApiSearch(query, candidates) {
 
 export function combinedSearchScore(localScore, aiRank) {
   return localScore + (aiRank === undefined ? 0 : 5 / (aiRank + 1));
+}
+
+function escapedParameterPattern(name) {
+  const spaced = String(name).replace(/([a-z0-9])([A-Z])/g, '$1 $2');
+  return [...spaced].map((character) => /[a-z0-9]/i.test(character)
+    ? character
+    : character === ' ' ? '[\\s_-]*'
+      : `\\${character}`).join('');
+}
+
+export function requestValuesFromDocument(document, parameterNames) {
+  const text = String(document || '').trim();
+  const values = {};
+  if (!text) return values;
+
+  for (const parameterName of parameterNames) {
+    const name = escapedParameterPattern(parameterName);
+    const quoted = text.match(new RegExp(`(?:^|\\W)["']?${name}["']?\\s*(?:=|:|\\bis\\b)?\\s*["']([^"']+)["']`, 'i'));
+    const unquoted = text.match(new RegExp(`(?:^|\\W)["']?${name}["']?\\s*(?:(?:=|:)\\s*|\\bis\\b\\s+|\\s+)([^\\s,;&]+)`, 'i'));
+    let value = quoted?.[1] || unquoted?.[1] || '';
+    value = value.replace(/[)\]}]+$/, '');
+    if (!value || /^(?:for|with|and|then|please)$/i.test(value)) continue;
+    values[parameterName] = value;
+  }
+  return values;
 }

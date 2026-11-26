@@ -6,7 +6,7 @@ import {
   type Platform,
 } from './bridge';
 import { parseTokenCurl, tokenCurl, type TokenCurlConfig } from './tokenCurl.mjs';
-import { combinedSearchScore, rankApiSearch, scoreApiSearch } from './apiSearch.mjs';
+import { combinedSearchScore, rankApiSearch, requestValuesFromDocument, scoreApiSearch } from './apiSearch.mjs';
 
 type View = 'home' | 'catalog' | 'collections' | 'settings';
 type SettingsSection = 'appearance' | 'shortcuts' | 'contracts' | 'environments' | 'variables' | 'tokens' | 'ai' | 'documentation' | 'scan-rules' | 'privacy';
@@ -731,6 +731,7 @@ function App() {
   const [requestEnvironmentId, setRequestEnvironmentId] = useState('');
   const [requestToken, setRequestToken] = useState('');
   const [response, setResponse] = useState<Record<string, unknown> | null>(null);
+  const [requestDocument, setRequestDocument] = useState('');
   const [requestValues, setRequestValues] = useState<Record<string, string>>({});
   const [requestHeaders, setRequestHeaders] = useState('');
   const [requestBody, setRequestBody] = useState('');
@@ -771,6 +772,7 @@ function App() {
   const findInputRef = useRef<HTMLInputElement>(null);
   const commandRef = useRef<HTMLInputElement>(null);
   const requestSendRef = useRef<(() => void) | null>(null);
+  const findSelectionRef = useRef({ start: 0, end: 0 });
   const overflowRef = useRef<HTMLDivElement>(null);
   const aiSearchSequence = useRef(0);
   const latestSearch = useRef(search);
@@ -961,11 +963,10 @@ function App() {
     setFindMatch({ active: Number(result.active || 0), total: Number(result.total || 0) });
     if (findOpen) window.requestAnimationFrame(() => {
       const input = findInputRef.current;
-      if (!input) return;
-      const start = input.selectionStart;
-      const end = input.selectionEnd;
+      if (!input || document.activeElement !== input) return;
+      const { start, end } = findSelectionRef.current;
       input.focus({ preventScroll: true });
-      if (start !== null && end !== null) input.setSelectionRange(start, end);
+      input.setSelectionRange(start, end);
     });
   }), [desktop, findOpen]);
 
@@ -1603,7 +1604,12 @@ function App() {
     setSelectedOperation(operation);
     setRequestEnvironmentId(activeEnvironmentId);
     setRequestToken(token);
-    setRequestValues({});
+    const document = search.trim();
+    setRequestDocument(document);
+    setRequestValues(requestValuesFromDocument(
+      document,
+      operationParameters(operation).map((parameter) => parameter.name),
+    ));
     setRequestHeaders('');
     setRequestBody('');
     setAcceptIncomplete(preferences.acceptAllIncompleteContracts
@@ -2050,9 +2056,10 @@ function App() {
             value={search}
             onChange={(event) => { setSearch(event.target.value); setView('catalog'); }}
             onKeyDown={(event) => {
-              if (event.key === 'Enter' && aiAvailable) {
+              if (event.key === 'Enter') {
                 event.preventDefault();
-                void runAiSearch();
+                if (filteredOperations[0]) openOperation(filteredOperations[0]);
+                else if (aiAvailable) void runAiSearch();
               }
             }}
           />
@@ -2222,8 +2229,7 @@ function App() {
               aiSearching={aiSearchBusy}
               search={search}
               onSearch={setSearch}
-              onAiSearch={() => { void runAiSearch(); }}
-              aiAvailable={aiAvailable}
+              onAiSearch={() => { if (filteredOperations[0]) openOperation(filteredOperations[0]); else void runAiSearch(); }}
             />
           )}
           {view === 'catalog' && !snapshot && (
@@ -2375,6 +2381,17 @@ function App() {
           onToken={setRequestToken}
           values={requestValues}
           onValues={setRequestValues}
+          requestDocument={requestDocument}
+          onRequestDocument={(document) => {
+            setRequestDocument(document);
+            setRequestValues((current) => ({
+              ...current,
+              ...requestValuesFromDocument(
+                document,
+                operationParameters(selectedOperation).map((parameter) => parameter.name),
+              ),
+            }));
+          }}
           headers={requestHeaders}
           onHeaders={setRequestHeaders}
           body={requestBody}
@@ -2626,8 +2643,17 @@ function App() {
       {findOpen && (
         <div className="find-bar">
           <label htmlFor="find-input">Find in page</label>
-          <input ref={findInputRef} id="find-input" autoFocus value={findQuery} onChange={(event) => {
+          <input ref={findInputRef} id="find-input" autoFocus value={findQuery} onSelect={(event) => {
+            findSelectionRef.current = {
+              start: event.currentTarget.selectionStart ?? event.currentTarget.value.length,
+              end: event.currentTarget.selectionEnd ?? event.currentTarget.value.length,
+            };
+          }} onChange={(event) => {
             const text = event.target.value;
+            findSelectionRef.current = {
+              start: event.target.selectionStart ?? text.length,
+              end: event.target.selectionEnd ?? text.length,
+            };
             setFindQuery(text);
             setFindMatch({ active: 0, total: 0 });
             if (findTimerRef.current !== null) window.clearTimeout(findTimerRef.current);
@@ -2783,7 +2809,6 @@ function Catalog({
   search,
   onSearch,
   onAiSearch,
-  aiAvailable,
 }: {
   operations: Operation[];
   services: Service[];
@@ -2802,7 +2827,6 @@ function Catalog({
   search: string;
   onSearch: (value: string) => void;
   onAiSearch: () => void;
-  aiAvailable: boolean;
 }) {
   const [servicesCollapsed, setServicesCollapsed] = useState(false);
   const [servicesSide, setServicesSide] = useState<'left' | 'right'>('left');
@@ -2884,9 +2908,9 @@ function Catalog({
             <div className="catalog-search" role="search">
               <span aria-hidden="true">⌕</span>
               <input aria-label="Find the best matching API" value={search} onChange={(event) => onSearch(event.target.value)} placeholder="Describe the API you need…" onKeyDown={(event) => {
-                if (event.key === 'Enter' && aiAvailable) onAiSearch();
+                if (event.key === 'Enter') onAiSearch();
               }} />
-              <button type="button" className="catalog-ai-button" onClick={onAiSearch} disabled={!aiAvailable || aiSearching || !search.trim()}>{aiSearching ? 'Finding…' : 'Find with AI'}</button>
+              <button type="button" className="catalog-ai-button" onClick={onAiSearch} disabled={aiSearching || !search.trim()}>{aiSearching ? 'Finding…' : 'Build request'}</button>
             </div>
           </div>
           {operations.length ? (
@@ -2951,6 +2975,8 @@ function RequestDialog({
   onToken,
   values,
   onValues,
+  requestDocument,
+  onRequestDocument,
   headers,
   onHeaders,
   body,
@@ -2980,6 +3006,8 @@ function RequestDialog({
   onToken: (token: string) => void;
   values: Record<string, string>;
   onValues: (values: Record<string, string>) => void;
+  requestDocument: string;
+  onRequestDocument: (document: string) => void;
   headers: string;
   onHeaders: (headers: string) => void;
   body: string;
@@ -3126,6 +3154,15 @@ function RequestDialog({
           <section className="request-section">
             <div className="request-section-head"><div><h3>Request settings</h3><p>Values are used for this request only.</p></div><div className="request-quick-actions"><button type="button" className="quiet-action" onClick={onFavourite}>{isFavourite ? '★ Saved' : '☆ Favourite'}</button><button type="button" className="quiet-action" onClick={onDocument} disabled={documentationBusy}>{documentationBusy ? 'Documenting…' : 'Document'}</button></div></div>
             <OperationCustomFields key={operation.operationId} operation={operation} definitions={customFields} onSave={onSaveCustomFields} />
+            <Field label="Request builder document" hint="Describe the request in plain language. Recognized parameters are filled below as you type.">
+              <textarea
+                className="request-document"
+                rows={3}
+                value={requestDocument}
+                onChange={(event) => onRequestDocument(event.target.value)}
+                placeholder="Get pools for orgId ce080c13-da92-4e54-b375-517875018920"
+              />
+            </Field>
             <Field label="Environment">
               <select value={activeEnvironmentId} onChange={(event) => onEnvironment(event.target.value)}>
                 <option value="">Choose an environment</option>
