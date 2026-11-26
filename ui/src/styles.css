@@ -635,6 +635,7 @@ input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--accent);
 .request-section-head h3 { margin: 0; font-size: 12px; }
 .request-section-head p { margin: 4px 0 0; color: var(--muted); font-size: 9px; }
 .request-section .field { margin: 11px 0; }
+.request-document { min-height: 76px; resize: vertical; line-height: 1.5; }
 .response-status { border-radius: 5px; padding: 5px 7px; font-size: 9px; font-weight: 750; }
 .response-status.ok { background: var(--success-soft); color: var(--success); }
 .response-status.bad { background: var(--danger-soft); color: var(--danger); }
