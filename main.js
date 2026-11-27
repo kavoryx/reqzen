@@ -18,7 +18,7 @@ const gitClone = require('./lib/gitClone');
 const localScan = require('./lib/localScan');
 const projectFinder = require('./lib/projectFinder');
 const catalogExport = require('./lib/catalogExport');
-const { validateSnapshot } = require('./lib/snapshotValidation');
+const { parseSnapshot } = require('./lib/snapshotValidation');
 const customFields = require('./lib/customFields');
 const ollama = require('./lib/ollama');
 const openaiCompatible = require('./lib/openaiCompatible');
@@ -422,10 +422,10 @@ ipcMain.handle('snapshot:open', async (event, options) => {
     throw new Error('The snapshot is larger than 50 MB.');
   }
   const text = fs.readFileSync(file, 'utf8');
-  const parsed = safeParse(text);
-  const problem = validateSnapshot(parsed);
+  const parsedFile = parseSnapshot(text);
+  const problem = parsedFile.problem;
   if (problem) throw new Error(problem);
-  openSnapshot = parsed;
+  openSnapshot = parsedFile.snapshot;
   rememberEnvironments(openSnapshot);
   const types = options && options.compareOnly === true ? null : importSnapshotTokenTypes(openSnapshot);
   const importedVariables = options && options.compareOnly === true ? null : importSnapshotVariables(openSnapshot);
