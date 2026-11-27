@@ -906,8 +906,9 @@ function App() {
 
   useEffect(() => {
     let active = true;
-    Promise.all([desktop.getPreferences(), desktop.lastSnapshot(), desktop.getDocs(), desktop.listSnapshots(), desktop.modelStatus()])
-      .then(([preferenceResult, lastSnapshot, docsResult, workspaceResult, modelResult]) => {
+    Promise.all([desktop.getPreferences(), desktop.lastSnapshot(), desktop.getDocs(), desktop.modelStatus()])
+      .then(async ([preferenceResult, lastSnapshot, docsResult, modelResult]) => {
+        const workspaceResult = await desktop.listSnapshots();
         if (!active) return;
         const saved = record(record(preferenceResult).preferences);
         const mode = ['system', 'light', 'dark'].includes(String(saved.mode))

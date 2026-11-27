@@ -87,13 +87,11 @@ function readWorkspaceSnapshots() {
   try {
     const saved = JSON.parse(fs.readFileSync(workspaceSnapshotsFile, 'utf8'));
     const rows = Array.isArray(saved) ? saved : [];
-    return rows.filter((item) =>
-      item
-      && typeof item.id === 'string'
-      && typeof item.name === 'string'
-      && typeof item.text === 'string'
-      && safeParse(item.text)?.format === 'api-explorer-snapshot'
-    ).slice(-25);
+    return rows.flatMap((item) => {
+      if (!item || typeof item.id !== 'string' || typeof item.name !== 'string' || typeof item.text !== 'string') return [];
+      const parsed = parseSnapshot(item.text);
+      return parsed.problem ? [] : [{ ...item, text: JSON.stringify(parsed.snapshot) }];
+    }).slice(-25);
   } catch {
     return [];
   }
@@ -125,12 +123,18 @@ function workspaceSnapshotSummary(item) {
 
 function rememberWorkspaceSnapshot(name, text) {
   if (!workspaceSnapshotsFile) return null;
-  const hash = crypto.createHash('sha256').update(text).digest('hex').slice(0, 20);
+  const parsed = parseSnapshot(text);
+  if (parsed.problem) return null;
+  const canonicalText = JSON.stringify(parsed.snapshot);
+  const hash = crypto.createHash('sha256').update(canonicalText).digest('hex').slice(0, 20);
   const items = readWorkspaceSnapshots();
-  const existing = items.find((item) => item.id === hash);
-  const item = existing || { id: hash, name, text, createdAt: new Date().toISOString() };
+  const existing = items.find((item) => item.id === hash || item.text === canonicalText);
+  const item = existing || { id: hash, name, text: canonicalText, createdAt: new Date().toISOString() };
   if (!existing) items.push(item);
-  else if (existing.name !== name) existing.name = name;
+  else {
+    if (existing.name !== name) existing.name = name;
+    existing.text = canonicalText;
+  }
   saveWorkspaceSnapshots(items);
   return item;
 }
