@@ -3105,7 +3105,7 @@ function Catalog({
   const [servicesSide, setServicesSide] = useState<'left' | 'right'>('left');
   const [serviceWidth, setServiceWidth] = useState(220);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  const [pageSize, setPageSize] = useState(10);
   const catalogActionsRef = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
     const dismiss = (event: MouseEvent) => {
@@ -3297,6 +3297,7 @@ function Catalog({
                 <span className="pagination-summary">{pageStart}–{pageEnd} of {operations.length}</span>
                 <label className="pagination-size">Rows
                   <select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}>
+                    <option value={10}>10</option>
                     <option value={25}>25</option>
                     <option value={50}>50</option>
                     <option value={100}>100</option>
