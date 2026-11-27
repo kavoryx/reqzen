@@ -28,6 +28,7 @@ test('matching tolerates word order, case, plurals and long ID values', async ()
   const { rankApiSearch } = await search;
   assert.equal(rankApiSearch('USERS list', candidates)[0].candidate.id, 'list');
   assert.equal(rankApiSearch('get user by id 6aed518cc9d52fa901b034ae', candidates)[0].candidate.id, 'one');
+  assert.equal(rankApiSearch('get users for orgId ce080c13-da92-4e54-b375-517875018920', candidates)[0].candidate.id, 'list');
   assert.equal(rankApiSearch('identity users', candidates)[0].candidate.id, 'list');
 });
 
@@ -53,4 +54,20 @@ test('custom metadata is searchable even when it is the only matching text', asy
   const { rankApiSearch } = await search;
   const rows = [...candidates, { id: 'custom', method: 'GET', path: '/v1/reports', metadata: 'Team owner Platform Engineering' }];
   assert.equal(rankApiSearch('platform engineering', rows)[0].candidate.id, 'custom');
+});
+
+test('request documents populate parameter fields from natural language', async () => {
+  const { requestValuesFromDocument } = await search;
+  assert.deepEqual(
+    requestValuesFromDocument('get pools for orgId ce080c13-da92-4e54-b375-517875018920', ['orgId', 'poolId']),
+    { orgId: 'ce080c13-da92-4e54-b375-517875018920' },
+  );
+  assert.deepEqual(
+    requestValuesFromDocument('fetch pool with poolId="pool-42" and orgId: org-7', ['orgId', 'poolId']),
+    { orgId: 'org-7', poolId: 'pool-42' },
+  );
+  assert.deepEqual(
+    requestValuesFromDocument('orgId=org-7&poolId=pool-42', ['orgId', 'poolId']),
+    { orgId: 'org-7', poolId: 'pool-42' },
+  );
 });
