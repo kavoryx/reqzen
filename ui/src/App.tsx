@@ -169,7 +169,7 @@ const defaultPreferences: Preferences = {
     enforceIntent: true,
     strictEntity: true,
     distinguishGetAll: true,
-    entityGroups: ['pool, pools, pool group, pool groups, template, templates'],
+    entityGroups: [],
   },
 };
 
@@ -2545,7 +2545,7 @@ function App() {
       {variableEditor && (
         <Dialog title={variableEditor.id ? 'Edit variable' : 'Add variable'} detail="Values stay on this computer and can be used in request paths, headers, and bodies." onClose={() => setVariableEditor(null)}>
           <form className="dialog-form" onSubmit={(event) => { void saveVariable(event); }}>
-            <Field label="Variable name"><input name="name" autoFocus defaultValue={variableEditor.name} required placeholder="orgId" /></Field>
+            <Field label="Variable name"><input name="name" autoFocus defaultValue={variableEditor.name} required placeholder="parameterId" /></Field>
             <Field label="Shared value"><input name="value" defaultValue={variableEditor.value} placeholder="Value used unless an environment value overrides it" /></Field>
             <div className="dialog-actions"><Button type="button" onClick={() => setVariableEditor(null)}>Cancel</Button><Button variant="primary" type="submit">Save variable</Button></div>
           </form>
@@ -2699,7 +2699,7 @@ function App() {
           )}
           {customRequestMode === 'form' && (
           <form className="dialog-form custom-request-form" onSubmit={(event) => { void saveCustomRequest(event); }}>
-            <Field label="Request name"><input name="name" autoFocus required defaultValue={customRequestDraft.name} placeholder="List recent orders" /></Field>
+            <Field label="Request name"><input name="name" autoFocus required defaultValue={customRequestDraft.name} placeholder="Example request" /></Field>
             <div className="form-grid">
               <Field label="Method"><select name="method" defaultValue={customRequestDraft.method}>{methods.map((method) => <option key={method}>{method}</option>)}</select></Field>
               <Field label="Address"><input name="url" required defaultValue={customRequestDraft.url} placeholder="/v1/items or https://api.example.com/v1/items" /></Field>
@@ -3036,17 +3036,6 @@ function Catalog({
     <div className="catalog-page">
       <div className="page-heading">
         <div><p className="breadcrumb">WORKSPACE <span>/</span> CATALOG</p><h1>API catalog</h1><p className="page-description">Browse and prepare requests across your services.</p></div>
-        <div className="page-actions">
-          <span className="snapshot-chip" title={snapshotName || 'Loaded catalog'}>◫ {snapshotName || 'Loaded catalog'}</span>
-          <details ref={catalogActionsRef} className="catalog-actions" onKeyDown={(event) => { if (event.key === 'Escape') { event.currentTarget.open = false; event.currentTarget.querySelector('summary')?.focus(); } }}>
-            <summary>Catalog actions <span aria-hidden="true">⌄</span></summary>
-            <div className="catalog-actions-menu">
-              <button type="button" onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); onConfigureFields(); }}>Configure fields</button>
-              <button type="button" onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); onExportSnapshot(); }}>Export snapshot</button>
-            </div>
-          </details>
-          <Button variant="primary" onClick={onNewRequest}>＋ New request</Button>
-        </div>
       </div>
       {aiMessage && <div className="ai-search-message" role="status">{aiMessage}</div>}
       <div className={`catalog-layout services-${servicesSide} ${servicesCollapsed ? 'services-collapsed' : ''}`} style={{ '--service-width': `${serviceWidth}px` } as CSSProperties}>
@@ -3064,15 +3053,26 @@ function Catalog({
         {servicesCollapsed && <button className="services-expand" type="button" aria-label="Expand services" onClick={() => setServicesCollapsed(false)}>›</button>}
         <section className="operation-list" aria-label="API operations">
           <div className="operation-list-head">
-            <div><h2>{serviceName}</h2><p>{operations.length} operations</p></div>
-            <div className="catalog-search" role="search">
-              <span aria-hidden="true">⌕</span>
-              <input aria-label="Find the best matching API" value={search} onChange={(event) => onSearch(event.target.value)} placeholder="Describe the API you need…" onKeyDown={(event) => {
-                if (event.key === 'Enter') onAiSearch();
-              }} />
-              <button type="button" className="catalog-ai-button" onClick={onAiSearch} disabled={aiSearching || !search.trim()}>
-                {aiSearching ? 'Finding…' : aiAvailable ? 'Build request' : 'Open best match'}
-              </button>
+            <div><h2>{serviceName}</h2><p>{operations.length} operations{snapshotName ? ` · ${snapshotName}` : ''}</p></div>
+            <div className="operation-list-tools">
+              <div className="catalog-search" role="search">
+                <span aria-hidden="true">⌕</span>
+                <input aria-label="Find the best matching API" value={search} onChange={(event) => onSearch(event.target.value)} placeholder="Describe the request you want to prepare…" onKeyDown={(event) => {
+                  if (event.key === 'Enter') onAiSearch();
+                }} />
+                <button type="button" className="catalog-ai-button" onClick={onAiSearch} disabled={aiSearching || !search.trim()}>
+                  {aiSearching ? 'Finding…' : aiAvailable ? 'Build request' : 'Open best match'}
+                </button>
+              </div>
+              <details ref={catalogActionsRef} className="catalog-actions" onKeyDown={(event) => { if (event.key === 'Escape') { event.currentTarget.open = false; event.currentTarget.querySelector('summary')?.focus(); } }}>
+                <summary aria-label="Catalog actions" title="Catalog actions"><span aria-hidden="true">•••</span></summary>
+                <div className="catalog-actions-menu" role="menu">
+                  <button type="button" role="menuitem" onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); onNewRequest(); }}>New request</button>
+                  <div className="overflow-divider" />
+                  <button type="button" role="menuitem" onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); onConfigureFields(); }}>Configure fields</button>
+                  <button type="button" role="menuitem" onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); onExportSnapshot(); }}>Export snapshot</button>
+                </div>
+              </details>
             </div>
           </div>
           {operations.length ? (
@@ -3343,7 +3343,7 @@ function RequestDialog({
                 rows={3}
                 value={requestDocument}
                 onChange={(event) => onRequestDocument(event.target.value)}
-                placeholder="Get pools for orgId ce080c13-da92-4e54-b375-517875018920"
+                placeholder="Describe the request and include any parameter values to use."
               />
             </Field>
             <div className="request-document-actions">
@@ -3787,7 +3787,7 @@ function Settings({
                 <input type="checkbox" checked={preferences.apiSearch.strictEntity} disabled={!preferences.apiSearch.enforceIntent} onChange={(event) => onPreferences({
                   apiSearch: { ...preferences.apiSearch, strictEntity: event.target.checked },
                 })} />
-                <span><strong>Use the entity after the API version</strong><small>For paths such as /v2/pools/:poolId, only results for the requested entity are shown.</small></span>
+                <span><strong>Use the entity after the API version</strong><small>For paths such as /v2/resources/:resourceId, only results for the requested entity are shown.</small></span>
               </label>
               <Field label="Equivalent entity names" hint="One equivalence group per line. Separate related names with commas or =.">
                 <textarea
@@ -3802,7 +3802,7 @@ function Settings({
                   })}
                 />
               </Field>
-              <div className="privacy-note">Default example: “pool, pools, pool group, pool groups, template, templates”. Blank lines are removed when saved.</div>
+              <div className="privacy-note">Add optional groups such as equivalent singular, plural, or alternate resource names. Blank lines are removed when saved.</div>
             </section>
           )}
           {section === 'contracts' && (
@@ -3859,7 +3859,7 @@ function Settings({
           )}
           {section === 'variables' && (
             <section className="settings-card">
-              <div className="card-title-row"><div><h2>Variables</h2><p>Use reusable values such as organization IDs in request inputs.</p></div><Button variant="primary" onClick={onAddVariable}>＋ Add variable</Button></div>
+              <div className="card-title-row"><div><h2>Variables</h2><p>Use reusable values in request inputs.</p></div><Button variant="primary" onClick={onAddVariable}>＋ Add variable</Button></div>
               {variables.length ? <div className="variable-list">{variables.map((variable) => <div className="variable-row" key={variable.id}><code>{`{{${variable.name}}}`}</code><span>{variable.value ? 'Shared value saved' : 'Environment-specific values saved'}</span><button className="text-button" type="button" onClick={() => onEditVariable(variable)}>Edit</button><button className="text-button text-danger" type="button" onClick={() => onDeleteVariable(variable)}>Remove</button></div>)}</div> : <EmptyState title="No variables yet" text="Add a variable for values you reuse across API requests." action={<Button onClick={onAddVariable}>Add variable</Button>} />}
             </section>
           )}
