@@ -597,9 +597,17 @@ input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--accent);
 .column-resizer:hover::after, .column-resizer:focus-visible::after { width: 2px; background: #fff; }
 .operation-row { width: 100%; min-height: 58px; }
 .operation-table .operation-row:first-child { border-radius: 0; }
-.operation-path { display: flex; min-width: 0; align-items: center; gap: 6px; }
+.operation-path { display: flex; min-width: 0; align-items: center; flex-wrap: wrap; gap: 5px 6px; }
 .operation-path code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .operation-path code { min-width: 0; color: var(--text); font-family: ui-monospace, monospace; font-size: 11px; }
+.operation-path-badges, .operation-status-badges { display: inline-flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 4px; }
+.operation-path-badges:empty { display: none; }
+.operation-status { display: inline-flex; min-height: 18px; align-items: center; gap: 3px; padding: 1px 6px; border: 1px solid transparent; border-radius: 999px; font-size: 8px; font-weight: 780; letter-spacing: .15px; line-height: 1.2; white-space: nowrap; }
+.operation-status > span { font-size: 9px; line-height: 1; }
+.operation-status-hidden { border-color: color-mix(in srgb, var(--muted) 28%, var(--border)); background: color-mix(in srgb, var(--muted) 10%, var(--surface)); color: var(--muted); }
+.operation-status-internal { border-color: color-mix(in srgb, #6f64c7 25%, var(--border)); background: #f1edfc; color: #6251a5; }
+.operation-status-deprecated { border-color: color-mix(in srgb, var(--warn) 34%, var(--border)); background: var(--warn-soft); color: color-mix(in srgb, var(--warn) 88%, var(--text)); }
+:root[data-theme="dark"] .operation-status-internal, :root[data-theme="system"] .operation-status-internal { border-color: #514875; background: #302748; color: #b9a6f1; }
 .operation-summary { display: flex; min-width: 0; flex-direction: column; gap: 2px; color: var(--text); font-size: 10px; }
 .operation-summary strong, .operation-summary small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .operation-summary strong { font-size: 10px; font-weight: 650; }
@@ -881,7 +889,9 @@ input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--accent);
     min-height: 62px;
     padding: 10px;
   }
-  .operation-row .operation-path { min-width: 0; }
+  .operation-row .operation-path { min-width: 0; align-self: center; }
+  .operation-row .operation-path code { flex-basis: 100%; }
+  .operation-row .operation-path-badges { max-width: 100%; }
   .operation-row .operation-summary { grid-column: 2; margin-top: -11px; color: var(--muted); font-size: 9px; }
   .custom-columns .operation-row .operation-summary { grid-column: auto; margin-top: 0; }
   .welcome-page { padding: 28px 16px 28px; }

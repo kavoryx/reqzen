@@ -34,6 +34,8 @@ interface Operation {
   summary?: string;
   description?: string;
   schemaComplete?: boolean;
+  visibility?: 'PUBLIC' | 'INTERNAL' | 'HIDDEN';
+  lifecycleStatus?: 'ACTIVE' | 'DEPRECATED';
   definition?: Record<string, unknown>;
   parameters?: ApiParameter[];
   customFields?: Record<string, string>;
@@ -460,6 +462,31 @@ function Button({
 
 function MethodBadge({ method }: { method: string }) {
   return <span className={`method method-${method.toLowerCase()}`}>{method}</span>;
+}
+
+function OperationStatusBadges({ operation }: { operation: Operation }) {
+  const visibility = operation.visibility === 'HIDDEN' ? 'Hidden'
+    : operation.visibility === 'INTERNAL' ? 'Internal'
+      : null;
+  const deprecated = operation.lifecycleStatus === 'DEPRECATED';
+  if (!visibility && !deprecated) return null;
+
+  return (
+    <span className="operation-status-badges" aria-label="API status">
+      {visibility && (
+        <span className={`operation-status operation-status-${visibility.toLowerCase()}`} title={`${visibility} API`}>
+          <span aria-hidden="true">{visibility === 'Hidden' ? '◌' : '◇'}</span>
+          {visibility}
+        </span>
+      )}
+      {deprecated && (
+        <span className="operation-status operation-status-deprecated" title="Deprecated API">
+          <span aria-hidden="true">!</span>
+          Deprecated
+        </span>
+      )}
+    </span>
+  );
 }
 
 function Dialog({
@@ -3248,7 +3275,13 @@ function Catalog({
               {pageOperations.map((operation) => (
                 <button className={`operation-row ${aiSet.has(operation.operationId) ? 'ai-suggested' : ''}`} key={operation.operationId} type="button" style={columnsStyle} onClick={() => onOpenOperation(operation)}>
                   <MethodBadge method={operation.httpMethod} />
-                  <span className="operation-path"><code>{operation.pathTemplate}</code>{aiSet.has(operation.operationId) && <span className="ai-badge">AI suggested</span>}</span>
+                  <span className="operation-path">
+                    <code>{operation.pathTemplate}</code>
+                    <span className="operation-path-badges">
+                      <OperationStatusBadges operation={operation} />
+                      {aiSet.has(operation.operationId) && <span className="ai-badge">AI suggested</span>}
+                    </span>
+                  </span>
                   <span className="operation-service">{operation.serviceName}</span>
                   <span className="operation-summary">
                     <strong>{operation.summary || '—'}</strong>
