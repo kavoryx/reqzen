@@ -12,7 +12,7 @@ export const DEFAULT_SEARCH_OPTIONS = Object.freeze({
   enforceIntent: true,
   strictEntity: true,
   distinguishGetAll: true,
-  entityGroups: ['pool, pools, pool group, pool groups, template, templates'],
+  entityGroups: [],
 });
 
 function stem(word) {

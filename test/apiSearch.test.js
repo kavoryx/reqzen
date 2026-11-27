@@ -81,8 +81,9 @@ test('configured entity groups treat related names consistently', async () => {
     { id: 'group', method: 'GET', path: '/v1/pool-groups', summary: 'List pool groups' },
     { id: 'template', method: 'GET', path: '/v1/templates', summary: 'List templates' },
   ];
-  assert.deepEqual(rankApiSearch('fetch all pool groups', rows).map(({ candidate }) => candidate.id).sort(), ['group', 'pool', 'template']);
-  assert.deepEqual(rankApiSearch('get all templates/pools', rows).map(({ candidate }) => candidate.id).sort(), ['group', 'pool', 'template']);
+  const entityGroups = ['pool, pools, pool group, pool groups, template, templates'];
+  assert.deepEqual(rankApiSearch('fetch all pool groups', rows, { entityGroups }).map(({ candidate }) => candidate.id).sort(), ['group', 'pool', 'template']);
+  assert.deepEqual(rankApiSearch('get all templates/pools', rows, { entityGroups }).map(({ candidate }) => candidate.id).sort(), ['group', 'pool', 'template']);
   assert.deepEqual(rankApiSearch('fetch all pools', rows, { entityGroups: [] }).map(({ candidate }) => candidate.id), ['pool']);
 });
 

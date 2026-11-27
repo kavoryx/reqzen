@@ -290,7 +290,8 @@ code, pre, kbd { font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas
 .page-actions { justify-content: flex-end; }
 .snapshot-chip { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .catalog-actions { position: relative; }
-.catalog-actions summary { display: flex; min-height: 34px; align-items: center; gap: 8px; padding: 0 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface); color: var(--text); cursor: pointer; font-size: 12px; font-weight: 620; list-style: none; }
+.catalog-actions summary { display: flex; width: 34px; min-height: 34px; align-items: center; justify-content: center; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface); color: var(--muted); cursor: pointer; font-size: 13px; font-weight: 700; letter-spacing: 1px; list-style: none; }
+.catalog-actions summary:hover { border-color: var(--soft); background: var(--surface-subtle); color: var(--text); }
 .catalog-actions summary::-webkit-details-marker { display: none; }
 .catalog-actions summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .catalog-actions-menu { position: absolute; z-index: 6; top: calc(100% + 5px); right: 0; width: 180px; padding: 5px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow-2); }
@@ -310,10 +311,11 @@ code, pre, kbd { font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas
 .service-count { margin-left: auto; color: var(--soft); font-size: 10px; }
 .service-list-bottom { display: flex; align-items: center; gap: 7px; margin-top: auto; padding: 16px 9px 0; color: var(--soft); font-size: 10px; }
 .operation-list { min-width: 0; padding: 18px 26px 28px; }
-.operation-list-head { display: flex; align-items: center; justify-content: space-between; padding: 0 1px 12px; }
+.operation-list-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 1px 12px; }
 .operation-list-head h2 { margin: 0; font-size: 14px; font-weight: 680; }
 .operation-list-head p { margin: 4px 0 0; color: var(--muted); font-size: 10px; }
-.catalog-search { display: flex; width: min(470px, 55%); min-height: 36px; align-items: center; gap: 7px; padding: 3px 4px 3px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface); color: var(--soft); }
+.operation-list-tools { display: flex; width: min(520px, 64%); min-width: 0; align-items: center; justify-content: flex-end; gap: 8px; }
+.catalog-search { display: flex; min-width: 0; flex: 1; min-height: 36px; align-items: center; gap: 7px; padding: 3px 4px 3px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface); color: var(--soft); }
 .catalog-search > span { font-size: 18px; }
 .catalog-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--text); box-shadow: none; font-size: 11px; }
 .catalog-ai-button { min-height: 28px; padding: 0 9px; border: 0; border-radius: 5px; background: var(--accent); color: #fff; cursor: pointer; font-size: 9px; font-weight: 750; white-space: nowrap; }
@@ -786,6 +788,8 @@ input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--accent);
   .sidebar-bottom { width: 100%; align-items: center; }
   .page-heading { align-items: flex-start; flex-direction: column; padding: 22px 18px 17px; }
   .page-actions { width: 100%; justify-content: flex-start; }
+  .operation-list-head { align-items: stretch; flex-direction: column; gap: 10px; }
+  .operation-list-tools { width: 100%; }
   .catalog-layout { flex-direction: column; min-width: 0; }
   .service-list {
     position: relative;
