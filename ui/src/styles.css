@@ -314,22 +314,21 @@ code, pre, kbd { font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas
 .operation-list-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 1px 12px; }
 .operation-list-head h2 { margin: 0; font-size: 14px; font-weight: 680; }
 .operation-list-head p { margin: 4px 0 0; color: var(--muted); font-size: 10px; }
-.operation-list-tools { display: flex; width: min(760px, 72%); min-width: 0; align-items: center; justify-content: flex-end; gap: 8px; }
-.catalog-search-group { display: flex; min-width: 0; flex: 1; align-items: stretch; justify-content: flex-end; gap: 7px; }
-.api-quick-search, .catalog-search { display: flex; min-width: 0; align-items: center; gap: 7px; padding: 3px 4px 3px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface); color: var(--soft); transition: border-color 140ms ease, box-shadow 140ms ease, width 180ms ease, background-color 140ms ease; }
-.api-quick-search { width: clamp(132px, 23vw, 220px); flex: 0 1 220px; min-height: 36px; }
-.catalog-search { width: clamp(250px, 34vw, 470px); flex: 1 1 470px; min-height: 36px; align-items: flex-end; }
-.api-quick-search:focus-within, .catalog-search:focus-within { position: relative; z-index: 3; border-color: var(--accent); background: var(--raised); box-shadow: var(--focus), var(--shadow-2); }
-.api-quick-search:focus-within { width: clamp(200px, 32vw, 360px); flex-basis: 360px; }
-.catalog-search:focus-within { width: clamp(330px, 46vw, 640px); flex-basis: 640px; }
-.catalog-search > span { font-size: 18px; }
-.api-quick-search > span { font-size: 18px; }
-.api-quick-search input, .catalog-search textarea { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--text); box-shadow: none; font-size: 11px; }
-.api-quick-search input { width: 100%; height: 28px; }
-.catalog-search textarea { max-height: 176px; min-height: 28px; padding: 6px 0 5px; line-height: 1.45; resize: none; overflow-x: hidden; overflow-y: auto; }
+.operation-list-tools { display: flex; min-width: 0; align-items: center; justify-content: flex-end; gap: 8px; }
+.catalog-command-area { margin-bottom: 16px; }
+.catalog-command { display: flex; min-width: 0; min-height: 44px; align-items: flex-end; gap: 9px; padding: 5px 5px 5px 13px; border: 1px solid var(--border-strong); border-radius: 11px; background: var(--surface); color: var(--soft); box-shadow: var(--shadow-1); transition: border-color 140ms ease, box-shadow 140ms ease, background-color 140ms ease; }
+.catalog-command:focus-within { position: relative; z-index: 3; border-color: var(--accent); background: var(--raised); box-shadow: var(--focus), var(--shadow-2); }
+.catalog-command-icon { display: grid; width: 23px; min-height: 32px; place-items: center; color: var(--accent); font-size: 19px; }
+.catalog-command textarea { min-width: 0; max-height: 176px; min-height: 32px; flex: 1; padding: 7px 0 5px; border: 0; outline: 0; background: transparent; color: var(--text); box-shadow: none; font-size: 12px; line-height: 1.45; resize: none; overflow-x: hidden; overflow-y: auto; }
+.catalog-command textarea::placeholder { color: var(--soft); }
+.catalog-command-action { display: inline-flex; min-height: 32px; flex: 0 0 auto; align-items: center; justify-content: center; gap: 8px; padding: 0 11px; border: 0; border-radius: 7px; background: var(--accent); color: #fff; cursor: pointer; font-size: 10px; font-weight: 750; white-space: nowrap; }
+.catalog-command-action:hover:not(:disabled) { filter: brightness(.97); }
+.catalog-command-action:disabled { background: var(--surface-subtle); color: var(--soft); cursor: default; }
+.catalog-command-action > span { opacity: .78; font-size: 13px; }
+.catalog-command-hint { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 3px 0; color: var(--soft); font-size: 9px; line-height: 1.4; }
+.catalog-command-hint kbd { padding: 1px 4px; border: 1px solid var(--border); border-bottom-color: var(--border-strong); border-radius: 4px; background: var(--surface); color: var(--muted); font: inherit; }
 .search-clear { display: grid; width: 24px; height: 24px; flex: 0 0 24px; place-items: center; border: 0; border-radius: 50%; background: transparent; color: var(--soft); cursor: pointer; font-size: 15px; }
 .search-clear:hover { background: var(--surface-subtle); color: var(--text); }
-.catalog-ai-button { min-height: 28px; padding: 0 9px; border: 0; border-radius: 5px; background: var(--accent); color: #fff; cursor: pointer; font-size: 9px; font-weight: 750; white-space: nowrap; }
 .operation-row { display: flex; width: 100%; min-height: 58px; align-items: center; gap: 13px; padding: 9px 12px; border: 1px solid var(--border); border-bottom: 0; background: var(--surface); text-align: left; cursor: pointer; }
 .operation-row:first-child { border-radius: var(--radius-control) var(--radius-control) 0 0; }
 .operation-row:last-child { border-bottom: 1px solid var(--border); border-radius: 0 0 var(--radius-control) var(--radius-control); }
@@ -810,11 +809,8 @@ input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--accent);
   .sidebar-bottom { width: 100%; align-items: center; }
   .page-heading { align-items: flex-start; flex-direction: column; padding: 22px 18px 17px; }
   .page-actions { width: 100%; justify-content: flex-start; }
-  .operation-list-head { align-items: stretch; flex-direction: column; gap: 10px; }
-  .operation-list-tools { width: 100%; }
-  .catalog-search-group { flex-wrap: wrap; }
-  .api-quick-search, .catalog-search { width: 100%; flex-basis: 100%; }
-  .api-quick-search:focus-within, .catalog-search:focus-within { width: 100%; flex-basis: 100%; }
+  .operation-list-head { gap: 10px; }
+  .catalog-command-hint { align-items: flex-start; flex-direction: column; gap: 4px; }
   .catalog-layout { flex-direction: column; min-width: 0; }
   .service-list {
     position: relative;
@@ -864,6 +860,10 @@ input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--accent);
   .toolbar-search { min-width: 72px; height: 32px; padding-left: 8px; }
   .toolbar-search > span { display: none; }
   .environment-picker { max-width: 42px; min-width: 42px; }
+  .catalog-command { align-items: stretch; flex-wrap: wrap; }
+  .catalog-command textarea { flex-basis: calc(100% - 32px); }
+  .catalog-command-action { width: 100%; margin-left: 32px; }
+  .catalog-command-hint > span:last-child { display: none; }
   .environment-picker select,
   .prod-badge,
   .topbar-actions > .icon-button {

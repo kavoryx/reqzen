@@ -818,7 +818,6 @@ function App() {
   const [aiSearchMessage, setAiSearchMessage] = useState('');
   const [aiAvailable, setAiAvailable] = useState(false);
   const [selectedService, setSelectedService] = useState('');
-  const [apiQuery, setApiQuery] = useState('');
   const [notice, setNotice] = useState<Notice | null>(null);
   const [noticeClosing, setNoticeClosing] = useState(false);
   const [noticePaused, setNoticePaused] = useState(false);
@@ -1327,7 +1326,10 @@ function App() {
     setAiSearchIds([]);
     setAiSearchMessage('');
     setAiSearchBusy(false);
-    if (!aiAvailable || record(docsSettings.aiFeatures).search !== true || search.trim().length < 3 || !snapshot) {
+    const queryTerms = search.trim().split(/\s+/).filter(Boolean);
+    const looksLikeRequest = /\b(create|add|update|edit|delete|remove|get|fetch|find|retrieve|list|show|send|upload|download)\b/i.test(search)
+      && queryTerms.length >= 3;
+    if (!aiAvailable || record(docsSettings.aiFeatures).search !== true || !looksLikeRequest || !snapshot) {
       return;
     }
     const timer = window.setTimeout(() => { void runAiSearch(search); }, 900);
@@ -1336,16 +1338,13 @@ function App() {
 
   const filteredOperations = useMemo(() => {
     const normalized = search.trim();
-    const apiTerms = apiQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const apiTerms = normalized.toLowerCase().split(/\s+/).filter(Boolean);
     const aiRank = new Map(aiSearchIds.map((id, index) => [id, index]));
     return documentedOperations.map((operation, index) => ({
       operation,
       index,
       score: normalized ? scoreApiSearch(normalized, searchCandidates[index], preferences.apiSearch) : 0,
-    })).filter(({ operation, index, score }) => {
-      const matchesService = !selectedService || operation.serviceId === selectedService
-        || operation.serviceName === snapshot?.services.find((service) => service.serviceId === selectedService)?.name;
-      const searchableApiText = [
+      directMatch: apiTerms.every((term) => [
         operation.httpMethod,
         operation.pathTemplate,
         operation.summary,
@@ -1353,17 +1352,21 @@ function App() {
         operation.serviceName,
         operation.contractVersion,
         ...Object.values(operation.customFields || {}),
-      ].join(' ').toLowerCase();
-      const matchesApiQuery = apiTerms.every((term) => searchableApiText.includes(term));
+      ].join(' ').toLowerCase().includes(term)),
+    })).filter(({ operation, index, score, directMatch }) => {
+      const matchesService = !selectedService || operation.serviceId === selectedService
+        || operation.serviceName === snapshot?.services.find((service) => service.serviceId === selectedService)?.name;
       const allowedByAi = aiRank.has(operation.operationId)
         && matchesApiSearchIntent(normalized, searchCandidates[index], preferences.apiSearch);
-      return matchesService && matchesApiQuery && (!normalized || score > 0 || allowedByAi);
+      return matchesService && (!normalized || directMatch || score > 0 || allowedByAi);
     }).sort((left, right) => {
       const leftRank = aiRank.get(left.operation.operationId);
       const rightRank = aiRank.get(right.operation.operationId);
-      return combinedSearchScore(right.score, rightRank) - combinedSearchScore(left.score, leftRank) || left.index - right.index;
+      const rightScore = combinedSearchScore(right.score + (right.directMatch ? 1 : 0), rightRank);
+      const leftScore = combinedSearchScore(left.score + (left.directMatch ? 1 : 0), leftRank);
+      return rightScore - leftScore || left.index - right.index;
     }).map(({ operation }) => operation);
-  }, [apiQuery, aiSearchIds, documentedOperations, preferences.apiSearch, searchCandidates, search, selectedService, snapshot]);
+  }, [aiSearchIds, documentedOperations, preferences.apiSearch, searchCandidates, search, selectedService, snapshot]);
 
   useEffect(() => {
     if (!selectedOperation?.revisionId) return;
@@ -2473,13 +2476,10 @@ function App() {
               aiSearching={aiSearchBusy}
               search={search}
               onSearch={setSearch}
-              apiQuery={apiQuery}
-              onApiQuery={setApiQuery}
               onAiSearch={() => {
                 if (filteredOperations[0]) openOperation(filteredOperations[0]);
                 else if (aiAvailable && record(docsSettings.aiFeatures).search === true) void runAiSearch();
               }}
-              aiAvailable={aiAvailable && record(docsSettings.aiFeatures).search === true}
               columnWidths={preferences.columnWidths}
               onColumnWidths={(widths) => { void savePreference({ columnWidths: widths }); }}
             />
@@ -3071,10 +3071,7 @@ function Catalog({
   aiSearching,
   search,
   onSearch,
-  apiQuery,
-  onApiQuery,
   onAiSearch,
-  aiAvailable,
   columnWidths,
   onColumnWidths,
 }: {
@@ -3094,10 +3091,7 @@ function Catalog({
   aiSearching: boolean;
   search: string;
   onSearch: (value: string) => void;
-  apiQuery: string;
-  onApiQuery: (value: string) => void;
   onAiSearch: () => void;
-  aiAvailable: boolean;
   columnWidths: number[] | null;
   onColumnWidths: (widths: number[]) => void;
 }) {
@@ -3116,6 +3110,8 @@ function Catalog({
   }, []);
   const aiSet = useMemo(() => new Set(aiIds), [aiIds]);
   const visibleFields = customFields.filter((field) => field.visible);
+  const requestBuilderQuery = search.trim().split(/\s+/).length >= 3
+    && /\b(create|add|update|edit|delete|remove|get|fetch|find|retrieve|list|show|send|upload|download)\b/i.test(search);
   const pageCount = Math.max(1, Math.ceil(operations.length / pageSize));
   const currentPage = Math.min(page, pageCount);
   const pageOperations = operations.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -3203,40 +3199,6 @@ function Catalog({
           <div className="operation-list-head">
             <div><h2>{serviceName}</h2><p>{operations.length} operations{snapshotName ? ` · ${snapshotName}` : ''}</p></div>
             <div className="operation-list-tools">
-              <div className="catalog-search-group">
-                <div className="api-quick-search" role="search">
-                  <span aria-hidden="true">⌕</span>
-                  <input
-                    aria-label="Filter APIs by path, method, service, or summary"
-                    value={apiQuery}
-                    onChange={(event) => onApiQuery(event.target.value)}
-                    placeholder="Search APIs…"
-                    onKeyDown={(event) => {
-                      if (event.key === 'Escape') onApiQuery('');
-                    }}
-                  />
-                  {apiQuery && <button type="button" className="search-clear" aria-label="Clear API search" onClick={() => onApiQuery('')}>×</button>}
-                </div>
-                <div className="catalog-search" role="search">
-                  <span aria-hidden="true">✦</span>
-                  <AutoGrowTextarea
-                    rows={1}
-                    aria-label="Describe the request you want to build"
-                    value={search}
-                    onChange={(event) => onSearch(event.target.value)}
-                    placeholder="Describe the request you want to build…"
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' && !event.shiftKey) {
-                        event.preventDefault();
-                        onAiSearch();
-                      }
-                    }}
-                  />
-                  <button type="button" className="catalog-ai-button" onClick={onAiSearch} disabled={aiSearching || !search.trim()}>
-                    {aiSearching ? 'Finding…' : aiAvailable ? 'Build request' : 'Open best match'}
-                  </button>
-                </div>
-              </div>
               <details ref={catalogActionsRef} className="catalog-actions" onKeyDown={(event) => { if (event.key === 'Escape') { event.currentTarget.open = false; event.currentTarget.querySelector('summary')?.focus(); } }}>
                 <summary aria-label="Catalog actions" title="Catalog actions"><span aria-hidden="true">•••</span></summary>
                 <div className="catalog-actions-menu" role="menu">
@@ -3246,6 +3208,37 @@ function Catalog({
                   <button type="button" role="menuitem" onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); onExportSnapshot(); }}>Export snapshot</button>
                 </div>
               </details>
+            </div>
+          </div>
+          <div className="catalog-command-area">
+            <div className="catalog-command" role="search">
+              <span className="catalog-command-icon" aria-hidden="true">⌕</span>
+              <AutoGrowTextarea
+                rows={1}
+                aria-label="Search APIs or describe the request to build"
+                aria-describedby="catalog-command-hint"
+                value={search}
+                onChange={(event) => onSearch(event.target.value)}
+                placeholder="Search APIs or describe a request…"
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    onAiSearch();
+                  } else if (event.key === 'Escape' && search) {
+                    event.preventDefault();
+                    onSearch('');
+                  }
+                }}
+              />
+              {search && <button type="button" className="search-clear" aria-label="Clear search" onClick={() => onSearch('')}>×</button>}
+              <button type="button" className="catalog-command-action" onClick={onAiSearch} disabled={aiSearching || !search.trim()} aria-busy={aiSearching}>
+                {aiSearching ? 'Finding…' : requestBuilderQuery ? 'Build request' : 'Open best match'}
+                {!aiSearching && <span aria-hidden="true">↵</span>}
+              </button>
+            </div>
+            <div className="catalog-command-hint" id="catalog-command-hint">
+              <span>Filter by path, method, or service — or describe what you want to do.</span>
+              <span><kbd>Enter</kbd> to open <span aria-hidden="true">·</span> <kbd>Shift</kbd> + <kbd>Enter</kbd> for a new line</span>
             </div>
           </div>
           {operations.length ? (
