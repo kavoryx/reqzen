@@ -6,7 +6,7 @@ const path = require('path');
 const prefs = require('../lib/preferences');
 
 test('unknown values fall back to the defaults', () => {
-  assert.deepEqual(prefs.sanitize({ mode: 'neon', palette: 'teal' }), { mode: 'system', palette: 'teal', wrapText: false, columnWidths: null, textScale: 100, shortcuts: prefs.SHORTCUTS, acceptAllIncompleteContracts: false, acceptedIncompleteServices: [] });
+  assert.deepEqual(prefs.sanitize({ mode: 'neon', palette: 'teal' }), { mode: 'system', palette: 'teal', wrapText: false, columnWidths: null, textScale: 100, shortcuts: prefs.SHORTCUTS, acceptAllIncompleteContracts: false, acceptedIncompleteServices: [], apiSearch: prefs.SEARCH_DEFAULTS });
   assert.deepEqual(prefs.sanitize(null), prefs.DEFAULTS);
 });
 
@@ -17,7 +17,7 @@ test('a missing or damaged file loads as the defaults, and a saved choice round-
   fs.writeFileSync(file, '{oops');
   assert.deepEqual(prefs.load(file), prefs.DEFAULTS);
   prefs.save(file, { mode: 'dark', palette: 'violet', textScale: 130 });
-  assert.deepEqual(prefs.load(file), { mode: 'dark', palette: 'violet', wrapText: false, columnWidths: null, textScale: 130, shortcuts: prefs.SHORTCUTS, acceptAllIncompleteContracts: false, acceptedIncompleteServices: [] });
+  assert.deepEqual(prefs.load(file), { mode: 'dark', palette: 'violet', wrapText: false, columnWidths: null, textScale: 130, shortcuts: prefs.SHORTCUTS, acceptAllIncompleteContracts: false, acceptedIncompleteServices: [], apiSearch: prefs.SEARCH_DEFAULTS });
 });
 
 test('text size accepts only supported increments and bounds', () => {
@@ -44,4 +44,21 @@ test('shortcut and contract approval preferences are sanitized', () => {
   assert.equal(value.shortcuts.find, prefs.SHORTCUTS.find);
   assert.equal(value.acceptAllIncompleteContracts, true);
   assert.deepEqual(value.acceptedIncompleteServices, ['Orders']);
+});
+
+test('API search settings retain valid controls and remove empty alias rows', () => {
+  const value = prefs.sanitize({
+    apiSearch: {
+      enforceIntent: false,
+      strictEntity: true,
+      distinguishGetAll: false,
+      entityGroups: ['  virtual machine, vm, invvm ', '', 4, 'virtual machine, vm, invvm'],
+    },
+  });
+  assert.deepEqual(value.apiSearch, {
+    enforceIntent: false,
+    strictEntity: true,
+    distinguishGetAll: false,
+    entityGroups: ['virtual machine, vm, invvm'],
+  });
 });

@@ -6,10 +6,13 @@ import {
   type Platform,
 } from './bridge';
 import { parseTokenCurl, tokenCurl, type TokenCurlConfig } from './tokenCurl.mjs';
-import { combinedSearchScore, rankApiSearch, requestValuesFromDocument, scoreApiSearch } from './apiSearch.mjs';
+import {
+  combinedSearchScore, matchesApiSearchIntent, rankApiSearch, requestValuesFromDocument,
+  scoreApiSearch, updateRequestValuesFromDocument,
+} from './apiSearch.mjs';
 
 type View = 'home' | 'catalog' | 'collections' | 'settings';
-type SettingsSection = 'appearance' | 'shortcuts' | 'contracts' | 'environments' | 'variables' | 'tokens' | 'ai' | 'documentation' | 'scan-rules' | 'privacy';
+type SettingsSection = 'appearance' | 'shortcuts' | 'api-search' | 'contracts' | 'environments' | 'variables' | 'tokens' | 'ai' | 'documentation' | 'scan-rules' | 'privacy';
 type Severity = 'success' | 'error' | 'info';
 
 interface ApiParameter {
@@ -100,6 +103,12 @@ interface Preferences {
   shortcuts: Record<ShortcutAction, string>;
   acceptAllIncompleteContracts: boolean;
   acceptedIncompleteServices: string[];
+  apiSearch: {
+    enforceIntent: boolean;
+    strictEntity: boolean;
+    distinguishGetAll: boolean;
+    entityGroups: string[];
+  };
 }
 
 interface WorkspaceSnapshot {
@@ -156,6 +165,12 @@ const defaultPreferences: Preferences = {
   },
   acceptAllIncompleteContracts: false,
   acceptedIncompleteServices: [],
+  apiSearch: {
+    enforceIntent: true,
+    strictEntity: true,
+    distinguishGetAll: true,
+    entityGroups: ['pool, pools, pool group, pool groups, template, templates'],
+  },
 };
 
 type ShortcutAction = 'command' | 'settings' | 'find' | 'snapshot' | 'newRequest' | 'send';
@@ -772,7 +787,6 @@ function App() {
   const findInputRef = useRef<HTMLInputElement>(null);
   const commandRef = useRef<HTMLInputElement>(null);
   const requestSendRef = useRef<(() => void) | null>(null);
-  const findSelectionRef = useRef({ start: 0, end: 0 });
   const overflowRef = useRef<HTMLDivElement>(null);
   const aiSearchSequence = useRef(0);
   const latestSearch = useRef(search);
@@ -904,6 +918,7 @@ function App() {
           : null;
         const textScale = typeof saved.textScale === 'number' && Number.isInteger(saved.textScale) && saved.textScale >= 80 && saved.textScale <= 150 && saved.textScale % 10 === 0 ? saved.textScale : 100;
         const savedShortcuts = record(saved.shortcuts);
+        const savedSearch = record(saved.apiSearch);
         const shortcuts = Object.fromEntries(Object.entries(defaultPreferences.shortcuts).map(([action, fallback]) =>
           [action, typeof savedShortcuts[action] === 'string' ? String(savedShortcuts[action]) : fallback])) as Record<ShortcutAction, string>;
         setPreferences({
@@ -915,6 +930,14 @@ function App() {
           shortcuts,
           acceptAllIncompleteContracts: saved.acceptAllIncompleteContracts === true,
           acceptedIncompleteServices: arrayOf<string>(saved.acceptedIncompleteServices),
+          apiSearch: {
+            enforceIntent: savedSearch.enforceIntent !== false,
+            strictEntity: savedSearch.strictEntity !== false,
+            distinguishGetAll: savedSearch.distinguishGetAll !== false,
+            entityGroups: Array.isArray(savedSearch.entityGroups)
+              ? arrayOf<string>(savedSearch.entityGroups).filter((value) => value.trim())
+              : [...defaultPreferences.apiSearch.entityGroups],
+          },
         });
         void desktop.setTextScale(textScale).then((result) => {
           const problem = resultError(result);
@@ -961,14 +984,7 @@ function App() {
   useEffect(() => desktop.onFindResult((value) => {
     const result = record(value);
     setFindMatch({ active: Number(result.active || 0), total: Number(result.total || 0) });
-    if (findOpen) window.requestAnimationFrame(() => {
-      const input = findInputRef.current;
-      if (!input || document.activeElement !== input) return;
-      const { start, end } = findSelectionRef.current;
-      input.focus({ preventScroll: true });
-      input.setSelectionRange(start, end);
-    });
-  }), [desktop, findOpen]);
+  }), [desktop]);
 
   useEffect(() => {
     let active = true;
@@ -1139,9 +1155,10 @@ function App() {
     setAiSearchBusy(true);
     setAiSearchMessage('');
     try {
-      const ranked = rankApiSearch(normalized, searchCandidates).map((entry) => entry.candidate);
+      const ranked = rankApiSearch(normalized, searchCandidates, preferences.apiSearch).map((entry) => entry.candidate);
       const rankedIds = new Set(ranked.map((candidate) => candidate.id));
-      const candidates = [...ranked, ...searchCandidates.filter((candidate) => !rankedIds.has(candidate.id))].slice(0, 40);
+      const allowed = searchCandidates.filter((candidate) => matchesApiSearchIntent(normalized, candidate, preferences.apiSearch));
+      const candidates = [...ranked, ...allowed.filter((candidate) => !rankedIds.has(candidate.id))].slice(0, 40);
       const raw = record(await desktop.askAgents({ question: normalized, candidates }));
       if (sequence !== aiSearchSequence.current || normalized !== latestSearch.current.trim() || snapshot !== latestSnapshot.current) return;
       const problem = resultError(raw);
@@ -1156,7 +1173,7 @@ function App() {
     } finally {
       if (sequence === aiSearchSequence.current) setAiSearchBusy(false);
     }
-  }, [desktop, notify, search, searchCandidates, snapshot]);
+  }, [desktop, notify, preferences.apiSearch, search, searchCandidates, snapshot]);
 
   useEffect(() => {
     aiSearchSequence.current++;
@@ -1176,17 +1193,19 @@ function App() {
     return documentedOperations.map((operation, index) => ({
       operation,
       index,
-      score: normalized ? scoreApiSearch(normalized, searchCandidates[index]) : 0,
-    })).filter(({ operation, score }) => {
+      score: normalized ? scoreApiSearch(normalized, searchCandidates[index], preferences.apiSearch) : 0,
+    })).filter(({ operation, index, score }) => {
       const matchesService = !selectedService || operation.serviceId === selectedService
         || operation.serviceName === snapshot?.services.find((service) => service.serviceId === selectedService)?.name;
-      return matchesService && (!normalized || score > 0 || aiRank.has(operation.operationId));
+      const allowedByAi = aiRank.has(operation.operationId)
+        && matchesApiSearchIntent(normalized, searchCandidates[index], preferences.apiSearch);
+      return matchesService && (!normalized || score > 0 || allowedByAi);
     }).sort((left, right) => {
       const leftRank = aiRank.get(left.operation.operationId);
       const rightRank = aiRank.get(right.operation.operationId);
       return combinedSearchScore(right.score, rightRank) - combinedSearchScore(left.score, leftRank) || left.index - right.index;
     }).map(({ operation }) => operation);
-  }, [aiSearchIds, documentedOperations, searchCandidates, search, selectedService, snapshot]);
+  }, [aiSearchIds, documentedOperations, preferences.apiSearch, searchCandidates, search, selectedService, snapshot]);
 
   useEffect(() => {
     if (!selectedOperation?.revisionId) return;
@@ -1677,7 +1696,7 @@ function App() {
       const chromeProblem = resultError(chromeResult);
       if (chromeProblem) throw new Error(chromeProblem);
     } catch (error) {
-      notify(`Could not save appearance settings: ${errorMessage(error)}`, 'error');
+      notify(`Could not save settings: ${errorMessage(error)}`, 'error');
     }
   };
 
@@ -2384,13 +2403,12 @@ function App() {
           requestDocument={requestDocument}
           onRequestDocument={(document) => {
             setRequestDocument(document);
-            setRequestValues((current) => ({
-              ...current,
-              ...requestValuesFromDocument(
-                document,
-                operationParameters(selectedOperation).map((parameter) => parameter.name),
-              ),
-            }));
+            setRequestValues((current) => updateRequestValuesFromDocument(
+              current,
+              requestDocument,
+              document,
+              operationParameters(selectedOperation).map((parameter) => parameter.name),
+            ));
           }}
           headers={requestHeaders}
           onHeaders={setRequestHeaders}
@@ -2643,17 +2661,8 @@ function App() {
       {findOpen && (
         <div className="find-bar">
           <label htmlFor="find-input">Find in page</label>
-          <input ref={findInputRef} id="find-input" autoFocus value={findQuery} onSelect={(event) => {
-            findSelectionRef.current = {
-              start: event.currentTarget.selectionStart ?? event.currentTarget.value.length,
-              end: event.currentTarget.selectionEnd ?? event.currentTarget.value.length,
-            };
-          }} onChange={(event) => {
+          <input ref={findInputRef} id="find-input" autoFocus value={findQuery} onChange={(event) => {
             const text = event.target.value;
-            findSelectionRef.current = {
-              start: event.target.selectionStart ?? text.length,
-              end: event.target.selectionEnd ?? text.length,
-            };
             setFindQuery(text);
             setFindMatch({ active: 0, total: 0 });
             if (findTimerRef.current !== null) window.clearTimeout(findTimerRef.current);
@@ -3489,6 +3498,7 @@ function Settings({
   const nav: Array<{ id: SettingsSection; title: string; caption: string; icon: string }> = [
     { id: 'appearance', title: 'Appearance', caption: 'Theme and accent', icon: '◐' },
     { id: 'shortcuts', title: 'Keyboard shortcuts', caption: 'Customize key commands', icon: '⌘' },
+    { id: 'api-search', title: 'API search', caption: 'Intent and entity hints', icon: '⌕' },
     { id: 'contracts', title: 'API contracts', caption: 'Incomplete contract approval', icon: '✓' },
     { id: 'environments', title: 'Environments', caption: 'Hosts and confirmations', icon: '◎' },
     { id: 'variables', title: 'Variables', caption: 'Reusable values', icon: '⌗' },
@@ -3573,6 +3583,46 @@ function Settings({
                 ))}
               </div>
               <div className="privacy-note">Use a letter, number, comma, or Enter with optional Ctrl, Command, Alt, or Shift. Escape remains reserved for closing panels.</div>
+            </section>
+          )}
+          {section === 'api-search' && (
+            <section className="settings-card">
+              <div className="card-title-row">
+                <div><h2>API search hints</h2><p>Constrain natural-language results by action, HTTP method, and API entity.</p></div>
+                <Button type="button" onClick={() => onPreferences({ apiSearch: { ...defaultPreferences.apiSearch } })}>Reset defaults</Button>
+              </div>
+              <label className="check-row">
+                <input type="checkbox" checked={preferences.apiSearch.enforceIntent} onChange={(event) => onPreferences({
+                  apiSearch: { ...preferences.apiSearch, enforceIntent: event.target.checked },
+                })} />
+                <span><strong>Honor search actions</strong><small>Fetch/Get/By ID limits to GET, update limits to PUT or PATCH, PATCH limits to PATCH, and delete limits to DELETE.</small></span>
+              </label>
+              <label className="check-row">
+                <input type="checkbox" checked={preferences.apiSearch.distinguishGetAll} disabled={!preferences.apiSearch.enforceIntent} onChange={(event) => onPreferences({
+                  apiSearch: { ...preferences.apiSearch, distinguishGetAll: event.target.checked },
+                })} />
+                <span><strong>Distinguish get-all from get-by-ID</strong><small>“Get all” excludes item paths, while “by ID” requires a path parameter.</small></span>
+              </label>
+              <label className="check-row">
+                <input type="checkbox" checked={preferences.apiSearch.strictEntity} disabled={!preferences.apiSearch.enforceIntent} onChange={(event) => onPreferences({
+                  apiSearch: { ...preferences.apiSearch, strictEntity: event.target.checked },
+                })} />
+                <span><strong>Use the entity after the API version</strong><small>For paths such as /v2/pools/:poolId, only results for the requested entity are shown.</small></span>
+              </label>
+              <Field label="Equivalent entity names" hint="One equivalence group per line. Separate related names with commas or =.">
+                <textarea
+                  rows={5}
+                  value={preferences.apiSearch.entityGroups.join('\n')}
+                  aria-label="Equivalent entity names"
+                  onChange={(event) => onPreferences({
+                    apiSearch: {
+                      ...preferences.apiSearch,
+                      entityGroups: event.target.value.split('\n'),
+                    },
+                  })}
+                />
+              </Field>
+              <div className="privacy-note">Default example: “pool, pools, pool group, pool groups, template, templates”. Blank lines are removed when saved.</div>
             </section>
           )}
           {section === 'contracts' && (
