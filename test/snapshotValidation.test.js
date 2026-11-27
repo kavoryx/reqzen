@@ -38,3 +38,47 @@ test('parses safe external-agent JSON transport variants without weakening snaps
   assert.match(parseSnapshot(JSON.stringify({ result: { format: 'postman-collection', operations: [], services: [] } })).problem, /not a supported/);
   assert.equal(parseJsonDocument('{"unterminated":'), null);
 });
+
+test('normalizes service-nested Reqzen exports into the canonical snapshot shape', () => {
+  const external = {
+    format: 'reqzen-snapshot',
+    formatVersion: 1,
+    customFieldDefinitions: [{ key: 'repo', label: 'Repo', visible: true }],
+    services: [{
+      id: 'service-1',
+      name: 'Users',
+      repo: 'example/users',
+      operations: [{
+        id: 'operation-1',
+        method: 'GET',
+        path: '/v1/users/{id}',
+        version: 'v1',
+        summary: 'Get user',
+        parameters: [{ name: 'id', in: 'path', required: true }],
+        customFields: { repo: 'example/users' },
+      }],
+    }],
+  };
+  const parsed = parseSnapshot(JSON.stringify(external));
+  assert.equal(parsed.problem, '');
+  assert.equal(parsed.snapshot.format, 'api-explorer-snapshot');
+  assert.deepEqual(parsed.snapshot.services[0], {
+    id: 'service-1', name: 'Users', repo: 'example/users', serviceId: 'service-1',
+  });
+  assert.deepEqual(parsed.snapshot.operations[0], {
+    id: 'operation-1',
+    operationId: 'operation-1',
+    revisionId: 'operation-1',
+    method: 'GET',
+    httpMethod: 'GET',
+    path: '/v1/users/{id}',
+    pathTemplate: '/v1/users/{id}',
+    version: 'v1',
+    contractVersion: 'v1',
+    serviceId: 'service-1',
+    serviceName: 'Users',
+    summary: 'Get user',
+    parameters: [{ name: 'id', in: 'path', required: true }],
+    customFields: { repo: 'example/users' },
+  });
+});

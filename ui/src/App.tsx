@@ -787,6 +787,7 @@ function App() {
   const findInputRef = useRef<HTMLInputElement>(null);
   const commandRef = useRef<HTMLInputElement>(null);
   const requestSendRef = useRef<(() => void) | null>(null);
+  const findSelectionRef = useRef({ start: 0, end: 0 });
   const overflowRef = useRef<HTMLDivElement>(null);
   const aiSearchSequence = useRef(0);
   const latestSearch = useRef(search);
@@ -2661,8 +2662,17 @@ function App() {
       {findOpen && (
         <div className="find-bar">
           <label htmlFor="find-input">Find in page</label>
-          <input ref={findInputRef} id="find-input" autoFocus value={findQuery} onChange={(event) => {
+          <input ref={findInputRef} id="find-input" autoFocus value={findQuery} onSelect={(event) => {
+            findSelectionRef.current = {
+              start: event.currentTarget.selectionStart ?? event.currentTarget.value.length,
+              end: event.currentTarget.selectionEnd ?? event.currentTarget.value.length,
+            };
+          }} onChange={(event) => {
             const text = event.target.value;
+            findSelectionRef.current = {
+              start: event.target.selectionStart ?? text.length,
+              end: event.target.selectionEnd ?? text.length,
+            };
             setFindQuery(text);
             setFindMatch({ active: 0, total: 0 });
             if (findTimerRef.current !== null) window.clearTimeout(findTimerRef.current);
