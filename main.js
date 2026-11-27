@@ -525,20 +525,35 @@ ipcMain.handle('snapshot:last', () => {
   const items = readWorkspaceSnapshots();
   if (items.length > 0) {
     const selected = items.find((item) => item.id === activeSnapshotId) || items[items.length - 1];
-    return activateWorkspaceSnapshot(selected.id);
+    const restored = activateWorkspaceSnapshot(selected.id);
+    return restored || { problem: 'The saved API snapshot could not be restored. Open it again from Home.' };
+  }
+  if (workspaceSnapshotsFile && fs.existsSync(workspaceSnapshotsFile)) {
+    try {
+      const savedRows = JSON.parse(fs.readFileSync(workspaceSnapshotsFile, 'utf8'));
+      if (Array.isArray(savedRows) && savedRows.length > 0) {
+        return { problem: 'The saved API snapshot is invalid. Open it again from Home.' };
+      }
+    } catch {
+      return { problem: 'The saved API snapshot is damaged. Open it again from Home.' };
+    }
   }
   if (!lastSnapshotFile || !fs.existsSync(lastSnapshotFile)) return null;
   try {
     const saved = JSON.parse(fs.readFileSync(lastSnapshotFile, 'utf8'));
-    if (!saved || typeof saved.name !== 'string' || typeof saved.text !== 'string') return null;
+    if (!saved || typeof saved.name !== 'string' || typeof saved.text !== 'string') {
+      return { problem: 'The saved API snapshot is invalid. Open it again from Home.' };
+    }
     const parsed = withKnownEnvironments(safeParse(saved.text));
-    if (!parsed || parsed.format !== 'api-explorer-snapshot') return null;
+    if (!parsed || parsed.format !== 'api-explorer-snapshot') {
+      return { problem: 'The saved API snapshot is invalid. Open it again from Home.' };
+    }
     const workspaceItem = rememberWorkspaceSnapshot(saved.name, saved.text);
     openSnapshot = parsed;
     activeSnapshotId = workspaceItem?.id || '';
     return { id: activeSnapshotId, name: saved.name, text: JSON.stringify(parsed) };
   } catch {
-    return null;
+    return { problem: 'The saved API snapshot is damaged. Open it again from Home.' };
   }
 });
 

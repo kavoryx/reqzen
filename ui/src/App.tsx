@@ -1040,14 +1040,27 @@ function App() {
         }).catch((error: unknown) => notify(`Could not apply text size: ${errorMessage(error)}`, 'error'));
         const workspace = record(workspaceResult);
         setWorkspaceSnapshots(arrayOf<WorkspaceSnapshot>(workspace.snapshots));
-        setActiveSnapshotId(String(workspace.activeId || lastSnapshot?.id || ''));
+        const restoredId = lastSnapshot && 'id' in lastSnapshot ? lastSnapshot.id : '';
+        setActiveSnapshotId(String(workspace.activeId || restoredId || ''));
         const model = record(modelResult);
         setAiAvailable(model.available === true);
         if (model.available === true) setAiStatus(`Connected · ${String(model.model || 'model ready')}`);
         void desktop.setWindowAppearance(mode).catch((error: unknown) =>
           notify(`Could not update the window appearance: ${errorMessage(error)}`, 'error'));
         setDocsSettings(record(docsResult));
-        if (lastSnapshot) applySnapshot(lastSnapshot.text, lastSnapshot.name, lastSnapshot.id, false);
+        const restoreProblem = lastSnapshot && 'problem' in lastSnapshot ? lastSnapshot.problem : '';
+        if (restoreProblem) {
+          setView('home');
+          notify(restoreProblem, 'error');
+        } else if (lastSnapshot && 'text' in lastSnapshot) {
+          try {
+            applySnapshot(lastSnapshot.text, lastSnapshot.name, lastSnapshot.id);
+          } catch (error) {
+            setSnapshot(null);
+            setView('home');
+            notify(`The saved snapshot could not be restored: ${errorMessage(error)}`, 'error');
+          }
+        }
       })
       .catch((error: unknown) => notify(`Could not load saved app data: ${errorMessage(error)}`, 'error'))
       .finally(() => {

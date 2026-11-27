@@ -7,7 +7,7 @@ export interface DesktopBridge {
   selectSnapshot: (id: string) => Promise<unknown>;
   removeSnapshot: (id?: string) => Promise<unknown>;
   saveSnapshotCustomFields: (input: Record<string, unknown>) => Promise<unknown>;
-  lastSnapshot: () => Promise<{ id: string; name: string; text: string } | null>;
+  lastSnapshot: () => Promise<{ id: string; name: string; text: string } | { problem: string } | null>;
   runRequest: (run: Record<string, unknown>) => Promise<unknown>;
   listEnvironments: () => Promise<unknown>;
   saveEnvironment: (input: Record<string, unknown>) => Promise<unknown>;
