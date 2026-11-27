@@ -314,10 +314,21 @@ code, pre, kbd { font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas
 .operation-list-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 1px 12px; }
 .operation-list-head h2 { margin: 0; font-size: 14px; font-weight: 680; }
 .operation-list-head p { margin: 4px 0 0; color: var(--muted); font-size: 10px; }
-.operation-list-tools { display: flex; width: min(520px, 64%); min-width: 0; align-items: center; justify-content: flex-end; gap: 8px; }
-.catalog-search { display: flex; min-width: 0; flex: 1; min-height: 36px; align-items: center; gap: 7px; padding: 3px 4px 3px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface); color: var(--soft); }
+.operation-list-tools { display: flex; width: min(760px, 72%); min-width: 0; align-items: center; justify-content: flex-end; gap: 8px; }
+.catalog-search-group { display: flex; min-width: 0; flex: 1; align-items: stretch; justify-content: flex-end; gap: 7px; }
+.api-quick-search, .catalog-search { display: flex; min-width: 0; align-items: center; gap: 7px; padding: 3px 4px 3px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface); color: var(--soft); transition: border-color 140ms ease, box-shadow 140ms ease, width 180ms ease, background-color 140ms ease; }
+.api-quick-search { width: clamp(132px, 23vw, 220px); flex: 0 1 220px; min-height: 36px; }
+.catalog-search { width: clamp(250px, 34vw, 470px); flex: 1 1 470px; min-height: 36px; align-items: flex-end; }
+.api-quick-search:focus-within, .catalog-search:focus-within { position: relative; z-index: 3; border-color: var(--accent); background: var(--raised); box-shadow: var(--focus), var(--shadow-2); }
+.api-quick-search:focus-within { width: clamp(200px, 32vw, 360px); flex-basis: 360px; }
+.catalog-search:focus-within { width: clamp(330px, 46vw, 640px); flex-basis: 640px; }
 .catalog-search > span { font-size: 18px; }
-.catalog-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--text); box-shadow: none; font-size: 11px; }
+.api-quick-search > span { font-size: 18px; }
+.api-quick-search input, .catalog-search textarea { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--text); box-shadow: none; font-size: 11px; }
+.api-quick-search input { width: 100%; height: 28px; }
+.catalog-search textarea { max-height: 176px; min-height: 28px; padding: 6px 0 5px; line-height: 1.45; resize: none; overflow-x: hidden; overflow-y: auto; }
+.search-clear { display: grid; width: 24px; height: 24px; flex: 0 0 24px; place-items: center; border: 0; border-radius: 50%; background: transparent; color: var(--soft); cursor: pointer; font-size: 15px; }
+.search-clear:hover { background: var(--surface-subtle); color: var(--text); }
 .catalog-ai-button { min-height: 28px; padding: 0 9px; border: 0; border-radius: 5px; background: var(--accent); color: #fff; cursor: pointer; font-size: 9px; font-weight: 750; white-space: nowrap; }
 .operation-row { display: flex; width: 100%; min-height: 58px; align-items: center; gap: 13px; padding: 9px 12px; border: 1px solid var(--border); border-bottom: 0; background: var(--surface); text-align: left; cursor: pointer; }
 .operation-row:first-child { border-radius: var(--radius-control) var(--radius-control) 0 0; }
@@ -649,7 +660,8 @@ input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--accent);
 .request-section-head h3 { margin: 0; font-size: 12px; }
 .request-section-head p { margin: 4px 0 0; color: var(--muted); font-size: 9px; }
 .request-section .field { margin: 11px 0; }
-.request-document { min-height: 76px; resize: vertical; line-height: 1.5; }
+.request-document { min-height: 76px; max-height: 240px; resize: none; line-height: 1.5; }
+.auto-grow-textarea { overflow-y: auto; transition: height 120ms ease-out; }
 .request-document-actions { display: flex; align-items: center; gap: 10px; margin: -3px 0 13px; }
 .request-document-actions small { color: var(--muted); font-size: 9px; line-height: 1.4; }
 .ai-workflow-settings { margin: 4px 0 17px; padding: 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-subtle); }
@@ -718,6 +730,8 @@ input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--accent);
 .toast-message { min-width: 0; }
 .toast button { display: grid; width: 24px; height: 24px; flex: 0 0 24px; place-items: center; margin-left: 2px; border: 0; border-radius: 50%; background: color-mix(in srgb, var(--surface) 58%, transparent); color: var(--muted); cursor: pointer; font-size: 15px; line-height: 1; }
 .toast button:hover { background: var(--surface); color: var(--text); }
+.full-text-preview { position: fixed; z-index: 100; max-width: calc(100vw - 24px); max-height: min(55vh, 420px); overflow: auto; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); border-radius: 12px 12px 12px 4px; background: var(--raised); box-shadow: var(--shadow-3); color: var(--text); font-size: 11px; font-weight: 450; line-height: 1.55; overflow-wrap: anywhere; white-space: pre-wrap; animation: dialog-in 120ms ease-out; }
+.full-text-preview::before { position: absolute; top: -5px; left: 18px; width: 8px; height: 8px; border-top: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); border-left: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); background: var(--raised); content: ""; transform: rotate(45deg); }
 .loading-screen { display: flex; width: 100vw; height: 100vh; align-items: center; justify-content: center; flex-direction: column; gap: 12px; background: var(--app-bg); color: var(--muted); font-size: 12px; }
 .loading-screen p { margin: 0; }
 
@@ -790,6 +804,9 @@ input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--accent);
   .page-actions { width: 100%; justify-content: flex-start; }
   .operation-list-head { align-items: stretch; flex-direction: column; gap: 10px; }
   .operation-list-tools { width: 100%; }
+  .catalog-search-group { flex-wrap: wrap; }
+  .api-quick-search, .catalog-search { width: 100%; flex-basis: 100%; }
+  .api-quick-search:focus-within, .catalog-search:focus-within { width: 100%; flex-basis: 100%; }
   .catalog-layout { flex-direction: column; min-width: 0; }
   .service-list {
     position: relative;
