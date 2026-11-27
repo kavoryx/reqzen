@@ -671,11 +671,13 @@ function OperationCustomFields({ operation, definitions, onSave }: {
   const [values, setValues] = useState<Record<string, string>>(operation.customFields || {});
   const [busy, setBusy] = useState(false);
   if (!definitions.length) return null;
-  return <div className="token-generator">
-    <div className="token-generator-head"><strong>Custom API fields</strong><small>Saved with this snapshot and included when shared. Do not enter secrets.</small></div>
-    {definitions.map((field) => <Field key={field.key} label={field.label}><input maxLength={1000} value={values[field.key] || ''} onChange={(event) => setValues({ ...values, [field.key]: event.target.value })} /></Field>)}
-    <Button type="button" disabled={busy} onClick={() => { setBusy(true); void onSave(values).finally(() => setBusy(false)); }}>{busy ? 'Saving…' : 'Save API fields'}</Button>
-  </div>;
+  return <details className="token-generator custom-api-fields">
+    <summary><span><strong>Custom API fields</strong><small>Optional metadata saved with this snapshot. Do not enter secrets.</small></span><span aria-hidden="true">⌄</span></summary>
+    <div className="custom-api-fields-body">
+      {definitions.map((field) => <Field key={field.key} label={field.label}><input maxLength={1000} value={values[field.key] || ''} onChange={(event) => setValues({ ...values, [field.key]: event.target.value })} /></Field>)}
+      <Button type="button" disabled={busy} onClick={() => { setBusy(true); void onSave(values).finally(() => setBusy(false)); }}>{busy ? 'Saving…' : 'Save API fields'}</Button>
+    </div>
+  </details>;
 }
 
 function App() {
@@ -748,6 +750,7 @@ function App() {
   const [response, setResponse] = useState<Record<string, unknown> | null>(null);
   const [requestDocument, setRequestDocument] = useState('');
   const [requestValues, setRequestValues] = useState<Record<string, string>>({});
+  const [requestPlanningBusy, setRequestPlanningBusy] = useState(false);
   const [requestHeaders, setRequestHeaders] = useState('');
   const [requestBody, setRequestBody] = useState('');
   const [acceptIncomplete, setAcceptIncomplete] = useState(false);
@@ -788,6 +791,7 @@ function App() {
   const commandRef = useRef<HTMLInputElement>(null);
   const requestSendRef = useRef<(() => void) | null>(null);
   const findSelectionRef = useRef({ start: 0, end: 0 });
+  const requestPlanningSequence = useRef(0);
   const overflowRef = useRef<HTMLDivElement>(null);
   const aiSearchSequence = useRef(0);
   const latestSearch = useRef(search);
@@ -985,6 +989,13 @@ function App() {
   useEffect(() => desktop.onFindResult((value) => {
     const result = record(value);
     setFindMatch({ active: Number(result.active || 0), total: Number(result.total || 0) });
+    window.setTimeout(() => {
+      const input = findInputRef.current;
+      if (!input) return;
+      input.focus({ preventScroll: true });
+      const { start, end } = findSelectionRef.current;
+      input.setSelectionRange(Math.min(start, input.value.length), Math.min(end, input.value.length));
+    }, 0);
   }), [desktop]);
 
   useEffect(() => {
@@ -1109,6 +1120,11 @@ function App() {
     }
   }, [customRequestEditor]);
 
+  useEffect(() => {
+    requestPlanningSequence.current++;
+    setRequestPlanningBusy(false);
+  }, [selectedOperation?.operationId]);
+
   useEffect(() => setActiveCommand(0), [commandQuery]);
 
   const activeEnvironment = environments.find((environment) =>
@@ -1181,12 +1197,12 @@ function App() {
     setAiSearchIds([]);
     setAiSearchMessage('');
     setAiSearchBusy(false);
-    if (!aiAvailable || search.trim().length < 3 || !snapshot) {
+    if (!aiAvailable || record(docsSettings.aiFeatures).search !== true || search.trim().length < 3 || !snapshot) {
       return;
     }
     const timer = window.setTimeout(() => { void runAiSearch(search); }, 900);
     return () => window.clearTimeout(timer);
-  }, [aiAvailable, runAiSearch, search, snapshot]);
+  }, [aiAvailable, docsSettings.aiFeatures, runAiSearch, search, snapshot]);
 
   const filteredOperations = useMemo(() => {
     const normalized = search.trim();
@@ -1637,6 +1653,61 @@ function App() {
     setResponse(null);
   };
 
+  const applyRequestDocument = async () => {
+    if (!selectedOperation) return;
+    const parameters = operationParameters(selectedOperation);
+    const parameterNames = parameters.map((parameter) => parameter.name);
+    const localValues = requestValuesFromDocument(requestDocument, parameterNames);
+    setRequestValues((current) => ({ ...current, ...localValues }));
+    if (!requestDocument.trim()) {
+      notify('Enter a request description before applying it.', 'info');
+      return;
+    }
+    if (!aiAvailable || record(docsSettings.aiFeatures).requestPlanning !== true) {
+      notify(Object.keys(localValues).length
+        ? 'Request inputs recognized and filled. Review the values before sending.'
+        : 'No values were recognized. Use a parameter name followed by its value, or enable AI request planning in Settings.', 'info');
+      return;
+    }
+    const sequence = ++requestPlanningSequence.current;
+    setRequestPlanningBusy(true);
+    try {
+      const detail = record(selectedOperation.definition);
+      const operationDetail = record(detail.operation);
+      const result = record(await desktop.fillFromDescription({
+        description: requestDocument,
+        operation: {
+          method: selectedOperation.httpMethod,
+          path: selectedOperation.pathTemplate,
+          parameters,
+          hasBody: ['POST', 'PUT', 'PATCH', 'DELETE'].includes(selectedOperation.httpMethod),
+          bodySchema: operationDetail.requestBody,
+        },
+      }));
+      const problem = resultError(result);
+      if (problem) throw new Error(problem);
+      if (sequence !== requestPlanningSequence.current) return;
+      const planned = record(result.values);
+      const plannedValues = {
+        ...record(planned.path),
+        ...record(planned.query),
+        ...record(planned.headers),
+      };
+      setRequestValues((current) => ({
+        ...current,
+        ...localValues,
+        ...Object.fromEntries(Object.entries(plannedValues).filter((entry) => typeof entry[1] === 'string')) as Record<string, string>,
+      }));
+      if (typeof planned.body === 'string') setRequestBody(planned.body);
+      notify('Request suggestions applied. Review every value before sending.', 'success');
+    } catch (error) {
+      if (sequence !== requestPlanningSequence.current) return;
+      notify(`AI planning was unavailable; recognized values were still applied. ${errorMessage(error)}`, 'info');
+    } finally {
+      if (sequence === requestPlanningSequence.current) setRequestPlanningBusy(false);
+    }
+  };
+
   const saveEnvironment = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!environmentEditor) return;
@@ -1805,6 +1876,17 @@ function App() {
       instructions: String(form.get('instructions') ?? docsSettings.instructions ?? ''),
       afterScanInstructions: String(form.get('afterScanInstructions') ?? docsSettings.afterScanInstructions ?? ''),
       generateAfterScan: generateAfterScan ? generateAfterScan.checked : docsSettings.generateAfterScan !== false,
+      aiFeatures: {
+        search: event.currentTarget.querySelector<HTMLInputElement>('input[name="aiSearch"]')?.checked
+          ?? record(docsSettings.aiFeatures).search !== false,
+        requestPlanning: event.currentTarget.querySelector<HTMLInputElement>('input[name="aiRequestPlanning"]')?.checked
+          ?? record(docsSettings.aiFeatures).requestPlanning !== false,
+        documentation: event.currentTarget.querySelector<HTMLInputElement>('input[name="aiDocumentation"]')?.checked
+          ?? record(docsSettings.aiFeatures).documentation !== false,
+      },
+      requestPlanningInstructions: String(form.get('requestPlanningInstructions')
+        ?? docsSettings.requestPlanningInstructions
+        ?? ''),
     };
     setBusy(true);
     try {
@@ -2249,7 +2331,13 @@ function App() {
               aiSearching={aiSearchBusy}
               search={search}
               onSearch={setSearch}
-              onAiSearch={() => { if (filteredOperations[0]) openOperation(filteredOperations[0]); else void runAiSearch(); }}
+              onAiSearch={() => {
+                if (filteredOperations[0]) openOperation(filteredOperations[0]);
+                else if (aiAvailable && record(docsSettings.aiFeatures).search === true) void runAiSearch();
+              }}
+              aiAvailable={aiAvailable && record(docsSettings.aiFeatures).search === true}
+              columnWidths={preferences.columnWidths}
+              onColumnWidths={(widths) => { void savePreference({ columnWidths: widths }); }}
             />
           )}
           {view === 'catalog' && !snapshot && (
@@ -2411,6 +2499,8 @@ function App() {
               operationParameters(selectedOperation).map((parameter) => parameter.name),
             ));
           }}
+          onApplyRequestDocument={() => { void applyRequestDocument(); }}
+          requestPlanningBusy={requestPlanningBusy}
           headers={requestHeaders}
           onHeaders={setRequestHeaders}
           body={requestBody}
@@ -2677,12 +2767,22 @@ function App() {
             setFindMatch({ active: 0, total: 0 });
             if (findTimerRef.current !== null) window.clearTimeout(findTimerRef.current);
             findTimerRef.current = window.setTimeout(() => {
-              void desktop.findInPage({ text });
+              void desktop.findInPage({ text }).then(() => {
+                window.setTimeout(() => {
+                  findInputRef.current?.focus({ preventScroll: true });
+                  findInputRef.current?.setSelectionRange(
+                    findSelectionRef.current.start,
+                    findSelectionRef.current.end,
+                  );
+                }, 0);
+              });
             }, 80);
           }} onKeyDown={(event) => {
             if (event.key === 'Enter') {
               event.preventDefault();
-              void desktop.findInPage({ text: findQuery, findNext: true, forward: !event.shiftKey });
+              void desktop.findInPage({ text: findQuery, findNext: true, forward: !event.shiftKey }).then(() => {
+                window.setTimeout(() => findInputRef.current?.focus({ preventScroll: true }), 0);
+              });
             }
             if (event.key === 'Escape') {
               setFindOpen(false);
@@ -2828,6 +2928,9 @@ function Catalog({
   search,
   onSearch,
   onAiSearch,
+  aiAvailable,
+  columnWidths,
+  onColumnWidths,
 }: {
   operations: Operation[];
   services: Service[];
@@ -2846,6 +2949,9 @@ function Catalog({
   search: string;
   onSearch: (value: string) => void;
   onAiSearch: () => void;
+  aiAvailable: boolean;
+  columnWidths: number[] | null;
+  onColumnWidths: (widths: number[]) => void;
 }) {
   const [servicesCollapsed, setServicesCollapsed] = useState(false);
   const [servicesSide, setServicesSide] = useState<'left' | 'right'>('left');
@@ -2867,15 +2973,50 @@ function Catalog({
   const pageOperations = operations.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const pageStart = operations.length ? (currentPage - 1) * pageSize + 1 : 0;
   const pageEnd = Math.min(currentPage * pageSize, operations.length);
+  const columnCount = 5 + visibleFields.length;
+  const [catalogColumnWidths, setCatalogColumnWidths] = useState<number[]>(() => [
+    ...(columnWidths || [62, 260, 140, 320, 80]),
+    ...visibleFields.map(() => 140),
+  ]);
   useEffect(() => setPage(1), [search, selectedService]);
   useEffect(() => {
     if (page > pageCount) setPage(pageCount);
   }, [page, pageCount]);
+  useEffect(() => {
+    setCatalogColumnWidths((current) => Array.from({ length: columnCount }, (_, index) =>
+      current[index] ?? (index < 5 ? [62, 260, 140, 320, 80][index] : 140)));
+  }, [columnCount]);
   const visiblePageNumbers = Array.from({ length: pageCount }, (_, index) => index + 1)
     .filter((number) => number === 1 || number === pageCount || Math.abs(number - currentPage) <= 1);
-  const columnsStyle: CSSProperties | undefined = visibleFields.length
-    ? { gridTemplateColumns: `62px minmax(160px, 1.2fr) minmax(100px, .8fr) minmax(150px, 1fr) 64px repeat(${visibleFields.length}, minmax(130px, 1fr))`, minWidth: `${700 + visibleFields.length * 140}px` }
-    : undefined;
+  const columnsStyle: CSSProperties = {
+    gridTemplateColumns: catalogColumnWidths.map((width) => `${width}px`).join(' '),
+    minWidth: `${catalogColumnWidths.reduce((total, width) => total + width, 0) + (catalogColumnWidths.length - 1) * 12}px`,
+  };
+  const resizeColumn = (index: number, event: ReactPointerEvent<HTMLSpanElement>) => {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = catalogColumnWidths[index];
+    const move = (moveEvent: PointerEvent) => {
+      setCatalogColumnWidths((current) => current.map((width, currentIndex) =>
+        currentIndex === index ? Math.max(index === 0 || index === 4 ? 60 : 100, Math.min(1200, startWidth + moveEvent.clientX - startX)) : width));
+    };
+    const stop = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', stop);
+      setCatalogColumnWidths((current) => {
+        onColumnWidths(current.slice(0, 5));
+        return current;
+      });
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', stop);
+  };
+  const resizeColumnWithKeyboard = (index: number, direction: number) => {
+    const next = catalogColumnWidths.map((width, currentIndex) =>
+      currentIndex === index ? Math.max(index === 0 || index === 4 ? 60 : 100, Math.min(1200, width + direction * 10)) : width);
+    setCatalogColumnWidths(next);
+    onColumnWidths(next.slice(0, 5));
+  };
   const startServiceResize = (event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault();
     const startX = event.clientX;
@@ -2929,14 +3070,33 @@ function Catalog({
               <input aria-label="Find the best matching API" value={search} onChange={(event) => onSearch(event.target.value)} placeholder="Describe the API you need…" onKeyDown={(event) => {
                 if (event.key === 'Enter') onAiSearch();
               }} />
-              <button type="button" className="catalog-ai-button" onClick={onAiSearch} disabled={aiSearching || !search.trim()}>{aiSearching ? 'Finding…' : 'Build request'}</button>
+              <button type="button" className="catalog-ai-button" onClick={onAiSearch} disabled={aiSearching || !search.trim()}>
+                {aiSearching ? 'Finding…' : aiAvailable ? 'Build request' : 'Open best match'}
+              </button>
             </div>
           </div>
           {operations.length ? (
             <div className={`operation-table ${visibleFields.length ? 'custom-columns' : ''}`}>
-              <div className="operation-table-head" aria-hidden="true" style={columnsStyle}>
-                <span>Method</span><span>Path</span><span>Service</span><span>Summary</span><span>Version</span>
-                {visibleFields.map((field) => <span key={field.key}>{field.label}</span>)}
+              <div className="operation-table-head" style={columnsStyle}>
+                {['Method', 'Path', 'Service', 'Summary', 'Version', ...visibleFields.map((field) => field.label)].map((label, index) => (
+                  <span className="catalog-column-heading" key={`${label}-${index}`}>
+                    <span>{label}</span>
+                    <span
+                      className="column-resizer"
+                      role="separator"
+                      aria-label={`Resize ${label} column`}
+                      aria-orientation="vertical"
+                      tabIndex={0}
+                      onPointerDown={(event) => resizeColumn(index, event)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+                          event.preventDefault();
+                          resizeColumnWithKeyboard(index, event.key === 'ArrowRight' ? 1 : -1);
+                        }
+                      }}
+                    />
+                  </span>
+                ))}
               </div>
               <div className="operation-rows">
               {pageOperations.map((operation) => (
@@ -2996,6 +3156,8 @@ function RequestDialog({
   onValues,
   requestDocument,
   onRequestDocument,
+  onApplyRequestDocument,
+  requestPlanningBusy,
   headers,
   onHeaders,
   body,
@@ -3027,6 +3189,8 @@ function RequestDialog({
   onValues: (values: Record<string, string>) => void;
   requestDocument: string;
   onRequestDocument: (document: string) => void;
+  onApplyRequestDocument: () => void;
+  requestPlanningBusy: boolean;
   headers: string;
   onHeaders: (headers: string) => void;
   body: string;
@@ -3173,7 +3337,7 @@ function RequestDialog({
           <section className="request-section">
             <div className="request-section-head"><div><h3>Request settings</h3><p>Values are used for this request only.</p></div><div className="request-quick-actions"><button type="button" className="quiet-action" onClick={onFavourite}>{isFavourite ? '★ Saved' : '☆ Favourite'}</button><button type="button" className="quiet-action" onClick={onDocument} disabled={documentationBusy}>{documentationBusy ? 'Documenting…' : 'Document'}</button></div></div>
             <OperationCustomFields key={operation.operationId} operation={operation} definitions={customFields} onSave={onSaveCustomFields} />
-            <Field label="Request builder document" hint="Describe the request in plain language. Recognized parameters are filled below as you type.">
+            <Field label="Request builder document" hint="Paste or describe the request, then apply it to refresh recognized fields. Values are never sent automatically.">
               <textarea
                 className="request-document"
                 rows={3}
@@ -3182,6 +3346,12 @@ function RequestDialog({
                 placeholder="Get pools for orgId ce080c13-da92-4e54-b375-517875018920"
               />
             </Field>
+            <div className="request-document-actions">
+              <Button type="button" disabled={requestPlanningBusy || !requestDocument.trim()} onClick={onApplyRequestDocument}>
+                {requestPlanningBusy ? 'Applying…' : 'Apply document'}
+              </Button>
+              <small>Uses local field recognition, with optional AI planning when enabled.</small>
+            </div>
             <Field label="Environment">
               <select value={activeEnvironmentId} onChange={(event) => onEnvironment(event.target.value)}>
                 <option value="">Choose an environment</option>
@@ -3709,6 +3879,15 @@ function Settings({
             <>
               <form className="settings-card" onSubmit={onSaveAi}>
                 <div className="card-title-row"><div><h2>AI model and provider</h2><p>AI is optional. Basic scanning and request building work without it.</p></div><span className="optional-chip">OPTIONAL</span></div>
+                <div className="ai-workflow-settings">
+                  <div className="card-title-row"><div><h3>AI workflow controls</h3><p>Choose which features may contact the configured model. Offline search and deterministic field recognition always remain available.</p></div></div>
+                  <label className="check-row"><input name="aiSearch" type="checkbox" defaultChecked={record(docsSettings.aiFeatures).search !== false} /><span><strong>Catalog suggestions</strong><small>Allow the AI agents to rerank search candidates. Local search remains active when disabled.</small></span></label>
+                  <label className="check-row"><input name="aiRequestPlanning" type="checkbox" defaultChecked={record(docsSettings.aiFeatures).requestPlanning !== false} /><span><strong>Request planning</strong><small>Allow an applied request document to suggest path, query, header, and body values.</small></span></label>
+                  <label className="check-row"><input name="aiDocumentation" type="checkbox" defaultChecked={record(docsSettings.aiFeatures).documentation !== false} /><span><strong>Documentation generation</strong><small>Allow documentation agents to use model output. Factual contract descriptions remain a separate fallback.</small></span></label>
+                  <Field label="Request planning instructions" hint="Optional workspace rules appended to each request-planning prompt. Do not include secrets.">
+                    <textarea name="requestPlanningInstructions" rows={4} defaultValue={String(docsSettings.requestPlanningInstructions || '')} placeholder="Prefer existing variable placeholders. Leave uncertain values blank." />
+                  </Field>
+                </div>
                 <Field label="Provider"><select name="provider" value={provider} onChange={(event) => changeProvider(event.target.value)}><option value="local">Local model (Ollama)</option><option value="openai">OpenAI-compatible</option><option value="claude">Claude API</option></select></Field>
                 {provider === 'local' && <>
                   <Field label="Local Ollama server URL" hint="Use a loopback URL on this computer."><input name="baseUrl" value={providerBaseUrl || 'http://127.0.0.1:11434'} onChange={(event) => { setProviderBaseUrl(event.target.value); setAvailableModels([]); }} placeholder="http://127.0.0.1:11434" /></Field>

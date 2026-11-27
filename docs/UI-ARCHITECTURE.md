@@ -24,6 +24,8 @@ Status messages appear as semantic, colour-coded balloons at the top right and d
 
 The API Catalog paginates filtered operations with selectable page sizes while keeping search and service filters deterministic. External documentation prompts copy the active source scan rules with the prompt, so another tool applies the same API-identification rules. Source scans derive operation summaries and descriptions from controller doc comments, Python docstrings, handler names, and route facts before optional AI enrichment; they do not require a model call to produce basic documentation.
 
+Catalog columns expose pointer and keyboard resizers, while saved preferences retain the five core widths. Natural-language search and request-document parsing remain local-first: the **Open best match** workflow does not call a model, and **Apply document** only asks the configured planner when that feature is enabled. AI workflow policy is centralized in `lib/aiFeatures.js`, so new AI surfaces can add feature controls without changing the basic catalog or request workflow. Request planning never sends a request; users still review populated fields before sending.
+
 | Action | macOS | Windows / Linux |
 |---|---|---|
 | Command palette | `⌘K` | `Ctrl+K` |

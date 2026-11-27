@@ -7,6 +7,7 @@ const ACTIONS = {
 };
 const METHOD_NAMES = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
 const IDENTIFIER_VALUES = /\b(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|[0-9a-z]+[0-9][0-9a-z_-]{15,})\b/gi;
+const LABELLED_IDENTIFIER_VALUES = /\b[a-z][a-z0-9_-]*id\b\s*(?:(?:=|:|\bis\b)\s*)?["']?[a-z0-9][a-z0-9._:/-]*["']?/gi;
 export const DEFAULT_SEARCH_OPTIONS = Object.freeze({
   enforceIntent: true,
   strictEntity: true,
@@ -77,6 +78,7 @@ function parsedQuery(query) {
   const version = String(query).match(/\bv(\d+(?:\.\d+)*)\b/i)?.[1] || '';
   const raw = words(String(query)
     .replace(IDENTIFIER_VALUES, ' ')
+    .replace(LABELLED_IDENTIFIER_VALUES, ' ')
     .replace(/\b[a-z][a-z0-9_]*id\b/gi, ' ')
     .replace(/\bv\d+(?:\.\d+)*\b/gi, ' '));
   const explicitMethod = String(query).toUpperCase().match(/\b(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b/)?.[1];
@@ -164,13 +166,31 @@ function escapedParameterPattern(name) {
       : `\\${character}`).join('');
 }
 
+function parameterPatterns(parameterName) {
+  const raw = String(parameterName);
+  const compact = raw.replace(/[_\s-]+/g, '');
+  const aliases = new Set([raw]);
+  if (/id$/i.test(compact) && compact.length > 2) {
+    const stem = compact.slice(0, -2);
+    aliases.add(stem);
+    aliases.add(`${stem}Id`);
+    aliases.add(`${stem}_id`);
+    aliases.add(`${stem}-id`);
+  }
+  const stem = compact.replace(/id$/i, '').toLowerCase();
+  if (stem === 'org') {
+    ['org', 'orgId', 'org_id', 'organization', 'organizationId', 'organization_id'].forEach((alias) => aliases.add(alias));
+  }
+  return [...aliases].map(escapedParameterPattern).sort((left, right) => right.length - left.length);
+}
+
 export function requestValuesFromDocument(document, parameterNames) {
   const text = String(document || '').trim();
   const values = {};
   if (!text) return values;
 
   for (const parameterName of parameterNames) {
-    const name = escapedParameterPattern(parameterName);
+    const name = `(?:${parameterPatterns(parameterName).join('|')})`;
     const quoted = text.match(new RegExp(`(?:^|\\W)["']?${name}["']?\\s*(?:=|:|\\bis\\b)?\\s*["']([^"']+)["']`, 'i'));
     const unquoted = text.match(new RegExp(`(?:^|\\W)["']?${name}["']?\\s*(?:(?:=|:)\\s*|\\bis\\b\\s+|\\s+)([^\\s,;&]+)`, 'i'));
     let value = quoted?.[1] || unquoted?.[1] || '';
