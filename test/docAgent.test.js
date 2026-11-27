@@ -121,6 +121,7 @@ test('external prompts share the documentation rules and specify an importable s
     assert.ok(prompt.includes(doc.RULES));
     assert.match(prompt, /HTTP method/);
     assert.match(prompt, /complete valid JSON/);
+    assert.match(prompt, /without an outer wrapper/);
     assert.match(prompt, /customFieldDefinitions/);
     assert.match(prompt, /customFields/);
     assert.match(prompt, /at most 12 fields/);
