@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type TextareaHTMLAttributes } from 'react';
 import {
   arrayOf,
   errorMessage,
@@ -34,6 +34,8 @@ interface Operation {
   summary?: string;
   description?: string;
   schemaComplete?: boolean;
+  visibility?: 'PUBLIC' | 'INTERNAL' | 'HIDDEN';
+  lifecycleStatus?: 'ACTIVE' | 'DEPRECATED';
   definition?: Record<string, unknown>;
   parameters?: ApiParameter[];
   customFields?: Record<string, string>;
@@ -175,6 +177,94 @@ const defaultPreferences: Preferences = {
 
 type ShortcutAction = 'command' | 'settings' | 'find' | 'snapshot' | 'newRequest' | 'send';
 const methods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
+type OverflowPreviewState = { text: string; left: number; top: number; width: number } | null;
+
+function FullTextPreview() {
+  const [preview, setPreview] = useState<OverflowPreviewState>(null);
+  const hideTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    const clearHideTimer = () => {
+      if (hideTimer.current !== null) {
+        window.clearTimeout(hideTimer.current);
+        hideTimer.current = null;
+      }
+    };
+    const valueFor = (element: HTMLElement) => {
+      if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) return element.value;
+      if (element instanceof HTMLSelectElement) return element.selectedOptions[0]?.textContent || '';
+      return element.textContent || element.getAttribute('title') || '';
+    };
+    const show = (event: Event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement) || target.closest('.full-text-preview')) return;
+      const element = target.matches('input, textarea, select, code, small, strong, span, p, label')
+        ? target
+        : target.closest<HTMLElement>('code, small, strong, span, p, label');
+      if (!element) return;
+      const style = window.getComputedStyle(element);
+      const hasValueOverflow = element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement
+        ? element.scrollWidth > element.clientWidth + 1 || element.scrollHeight > element.clientHeight + 1
+        : style.overflowX === 'hidden' || style.overflowY === 'hidden'
+          ? element.scrollWidth > element.clientWidth + 1 || element.scrollHeight > element.clientHeight + 1
+          : false;
+      if (!hasValueOverflow) return;
+      const text = valueFor(element).trim();
+      if (!text) return;
+      clearHideTimer();
+      const rect = element.getBoundingClientRect();
+      const width = Math.min(520, Math.max(240, Math.round(rect.width)), window.innerWidth - 24);
+      const left = Math.max(12, Math.min(window.innerWidth - width - 12, rect.left));
+      const top = rect.bottom + 8 + 220 <= window.innerHeight ? rect.bottom + 8 : Math.max(12, rect.top - 228);
+      setPreview({ text, left, top, width });
+    };
+    const hide = () => {
+      clearHideTimer();
+      hideTimer.current = window.setTimeout(() => setPreview(null), 120);
+    };
+    document.addEventListener('mouseover', show);
+    document.addEventListener('focusin', show);
+    document.addEventListener('mouseout', hide);
+    document.addEventListener('focusout', hide);
+    return () => {
+      clearHideTimer();
+      document.removeEventListener('mouseover', show);
+      document.removeEventListener('focusin', show);
+      document.removeEventListener('mouseout', hide);
+      document.removeEventListener('focusout', hide);
+    };
+  }, []);
+
+  if (!preview) return null;
+  return (
+    <div
+      className="full-text-preview"
+      role="tooltip"
+      style={{ left: preview.left, top: preview.top, width: preview.width }}
+      onMouseEnter={() => {
+        if (hideTimer.current !== null) {
+          window.clearTimeout(hideTimer.current);
+          hideTimer.current = null;
+        }
+      }}
+      onMouseLeave={() => setPreview(null)}
+    >
+      {preview.text}
+    </div>
+  );
+}
+
+function AutoGrowTextarea({ className = '', ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const textarea = ref.current;
+    if (!textarea) return;
+    textarea.style.height = '0px';
+    textarea.style.height = `${Math.min(240, Math.max(58, textarea.scrollHeight))}px`;
+  }, [props.value]);
+  return <textarea ref={ref} className={`auto-grow-textarea ${className}`.trim()} {...props} />;
+}
+
 const shortcut = (platform: Platform, value: string) => value.split('+').map((key) =>
   key === 'Mod' ? (platform === 'mac' ? '⌘' : 'Ctrl')
     : key === 'Meta' ? (platform === 'mac' ? '⌘' : 'Win')
@@ -372,6 +462,31 @@ function Button({
 
 function MethodBadge({ method }: { method: string }) {
   return <span className={`method method-${method.toLowerCase()}`}>{method}</span>;
+}
+
+function OperationStatusBadges({ operation }: { operation: Operation }) {
+  const visibility = operation.visibility === 'HIDDEN' ? 'Hidden'
+    : operation.visibility === 'INTERNAL' ? 'Internal'
+      : null;
+  const deprecated = operation.lifecycleStatus === 'DEPRECATED';
+  if (!visibility && !deprecated) return null;
+
+  return (
+    <span className="operation-status-badges" aria-label="API status">
+      {visibility && (
+        <span className={`operation-status operation-status-${visibility.toLowerCase()}`} title={`${visibility} API`}>
+          <span aria-hidden="true">{visibility === 'Hidden' ? '◌' : '◇'}</span>
+          {visibility}
+        </span>
+      )}
+      {deprecated && (
+        <span className="operation-status operation-status-deprecated" title="Deprecated API">
+          <span aria-hidden="true">!</span>
+          Deprecated
+        </span>
+      )}
+    </span>
+  );
 }
 
 function Dialog({
@@ -703,6 +818,7 @@ function App() {
   const [aiSearchMessage, setAiSearchMessage] = useState('');
   const [aiAvailable, setAiAvailable] = useState(false);
   const [selectedService, setSelectedService] = useState('');
+  const [apiQuery, setApiQuery] = useState('');
   const [notice, setNotice] = useState<Notice | null>(null);
   const [noticeClosing, setNoticeClosing] = useState(false);
   const [noticePaused, setNoticePaused] = useState(false);
@@ -951,14 +1067,27 @@ function App() {
         }).catch((error: unknown) => notify(`Could not apply text size: ${errorMessage(error)}`, 'error'));
         const workspace = record(workspaceResult);
         setWorkspaceSnapshots(arrayOf<WorkspaceSnapshot>(workspace.snapshots));
-        setActiveSnapshotId(String(workspace.activeId || lastSnapshot?.id || ''));
+        const restoredId = lastSnapshot && 'id' in lastSnapshot ? lastSnapshot.id : '';
+        setActiveSnapshotId(String(workspace.activeId || restoredId || ''));
         const model = record(modelResult);
         setAiAvailable(model.available === true);
         if (model.available === true) setAiStatus(`Connected · ${String(model.model || 'model ready')}`);
         void desktop.setWindowAppearance(mode).catch((error: unknown) =>
           notify(`Could not update the window appearance: ${errorMessage(error)}`, 'error'));
         setDocsSettings(record(docsResult));
-        if (lastSnapshot) applySnapshot(lastSnapshot.text, lastSnapshot.name, lastSnapshot.id, false);
+        const restoreProblem = lastSnapshot && 'problem' in lastSnapshot ? lastSnapshot.problem : '';
+        if (restoreProblem) {
+          setView('home');
+          notify(restoreProblem, 'error');
+        } else if (lastSnapshot && 'text' in lastSnapshot) {
+          try {
+            applySnapshot(lastSnapshot.text, lastSnapshot.name, lastSnapshot.id);
+          } catch (error) {
+            setSnapshot(null);
+            setView('home');
+            notify(`The saved snapshot could not be restored: ${errorMessage(error)}`, 'error');
+          }
+        }
       })
       .catch((error: unknown) => notify(`Could not load saved app data: ${errorMessage(error)}`, 'error'))
       .finally(() => {
@@ -1207,6 +1336,7 @@ function App() {
 
   const filteredOperations = useMemo(() => {
     const normalized = search.trim();
+    const apiTerms = apiQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
     const aiRank = new Map(aiSearchIds.map((id, index) => [id, index]));
     return documentedOperations.map((operation, index) => ({
       operation,
@@ -1215,15 +1345,25 @@ function App() {
     })).filter(({ operation, index, score }) => {
       const matchesService = !selectedService || operation.serviceId === selectedService
         || operation.serviceName === snapshot?.services.find((service) => service.serviceId === selectedService)?.name;
+      const searchableApiText = [
+        operation.httpMethod,
+        operation.pathTemplate,
+        operation.summary,
+        operation.description,
+        operation.serviceName,
+        operation.contractVersion,
+        ...Object.values(operation.customFields || {}),
+      ].join(' ').toLowerCase();
+      const matchesApiQuery = apiTerms.every((term) => searchableApiText.includes(term));
       const allowedByAi = aiRank.has(operation.operationId)
         && matchesApiSearchIntent(normalized, searchCandidates[index], preferences.apiSearch);
-      return matchesService && (!normalized || score > 0 || allowedByAi);
+      return matchesService && matchesApiQuery && (!normalized || score > 0 || allowedByAi);
     }).sort((left, right) => {
       const leftRank = aiRank.get(left.operation.operationId);
       const rightRank = aiRank.get(right.operation.operationId);
       return combinedSearchScore(right.score, rightRank) - combinedSearchScore(left.score, leftRank) || left.index - right.index;
     }).map(({ operation }) => operation);
-  }, [aiSearchIds, documentedOperations, preferences.apiSearch, searchCandidates, search, selectedService, snapshot]);
+  }, [apiQuery, aiSearchIds, documentedOperations, preferences.apiSearch, searchCandidates, search, selectedService, snapshot]);
 
   useEffect(() => {
     if (!selectedOperation?.revisionId) return;
@@ -2146,6 +2286,7 @@ function App() {
 
   return (
     <div className="app-frame">
+      <FullTextPreview />
       <header className="topbar">
         <button className="brand no-drag" type="button" onClick={() => setView('home')} aria-label="Reqzen home">
           <span className="brand-mark">R</span><span>Reqzen</span>
@@ -2332,6 +2473,8 @@ function App() {
               aiSearching={aiSearchBusy}
               search={search}
               onSearch={setSearch}
+              apiQuery={apiQuery}
+              onApiQuery={setApiQuery}
               onAiSearch={() => {
                 if (filteredOperations[0]) openOperation(filteredOperations[0]);
                 else if (aiAvailable && record(docsSettings.aiFeatures).search === true) void runAiSearch();
@@ -2928,6 +3071,8 @@ function Catalog({
   aiSearching,
   search,
   onSearch,
+  apiQuery,
+  onApiQuery,
   onAiSearch,
   aiAvailable,
   columnWidths,
@@ -2949,6 +3094,8 @@ function Catalog({
   aiSearching: boolean;
   search: string;
   onSearch: (value: string) => void;
+  apiQuery: string;
+  onApiQuery: (value: string) => void;
   onAiSearch: () => void;
   aiAvailable: boolean;
   columnWidths: number[] | null;
@@ -3056,14 +3203,39 @@ function Catalog({
           <div className="operation-list-head">
             <div><h2>{serviceName}</h2><p>{operations.length} operations{snapshotName ? ` · ${snapshotName}` : ''}</p></div>
             <div className="operation-list-tools">
-              <div className="catalog-search" role="search">
-                <span aria-hidden="true">⌕</span>
-                <input aria-label="Find the best matching API" value={search} onChange={(event) => onSearch(event.target.value)} placeholder="Describe the request you want to prepare…" onKeyDown={(event) => {
-                  if (event.key === 'Enter') onAiSearch();
-                }} />
-                <button type="button" className="catalog-ai-button" onClick={onAiSearch} disabled={aiSearching || !search.trim()}>
-                  {aiSearching ? 'Finding…' : aiAvailable ? 'Build request' : 'Open best match'}
-                </button>
+              <div className="catalog-search-group">
+                <div className="api-quick-search" role="search">
+                  <span aria-hidden="true">⌕</span>
+                  <input
+                    aria-label="Filter APIs by path, method, service, or summary"
+                    value={apiQuery}
+                    onChange={(event) => onApiQuery(event.target.value)}
+                    placeholder="Search APIs…"
+                    onKeyDown={(event) => {
+                      if (event.key === 'Escape') onApiQuery('');
+                    }}
+                  />
+                  {apiQuery && <button type="button" className="search-clear" aria-label="Clear API search" onClick={() => onApiQuery('')}>×</button>}
+                </div>
+                <div className="catalog-search" role="search">
+                  <span aria-hidden="true">✦</span>
+                  <AutoGrowTextarea
+                    rows={1}
+                    aria-label="Describe the request you want to build"
+                    value={search}
+                    onChange={(event) => onSearch(event.target.value)}
+                    placeholder="Describe the request you want to build…"
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && !event.shiftKey) {
+                        event.preventDefault();
+                        onAiSearch();
+                      }
+                    }}
+                  />
+                  <button type="button" className="catalog-ai-button" onClick={onAiSearch} disabled={aiSearching || !search.trim()}>
+                    {aiSearching ? 'Finding…' : aiAvailable ? 'Build request' : 'Open best match'}
+                  </button>
+                </div>
               </div>
               <details ref={catalogActionsRef} className="catalog-actions" onKeyDown={(event) => { if (event.key === 'Escape') { event.currentTarget.open = false; event.currentTarget.querySelector('summary')?.focus(); } }}>
                 <summary aria-label="Catalog actions" title="Catalog actions"><span aria-hidden="true">•••</span></summary>
@@ -3103,7 +3275,13 @@ function Catalog({
               {pageOperations.map((operation) => (
                 <button className={`operation-row ${aiSet.has(operation.operationId) ? 'ai-suggested' : ''}`} key={operation.operationId} type="button" style={columnsStyle} onClick={() => onOpenOperation(operation)}>
                   <MethodBadge method={operation.httpMethod} />
-                  <span className="operation-path"><code>{operation.pathTemplate}</code>{aiSet.has(operation.operationId) && <span className="ai-badge">AI suggested</span>}</span>
+                  <span className="operation-path">
+                    <code>{operation.pathTemplate}</code>
+                    <span className="operation-path-badges">
+                      <OperationStatusBadges operation={operation} />
+                      {aiSet.has(operation.operationId) && <span className="ai-badge">AI suggested</span>}
+                    </span>
+                  </span>
                   <span className="operation-service">{operation.serviceName}</span>
                   <span className="operation-summary">
                     <strong>{operation.summary || '—'}</strong>
@@ -3339,7 +3517,7 @@ function RequestDialog({
             <div className="request-section-head"><div><h3>Request settings</h3><p>Values are used for this request only.</p></div><div className="request-quick-actions"><button type="button" className="quiet-action" onClick={onFavourite}>{isFavourite ? '★ Saved' : '☆ Favourite'}</button><button type="button" className="quiet-action" onClick={onDocument} disabled={documentationBusy}>{documentationBusy ? 'Documenting…' : 'Document'}</button></div></div>
             <OperationCustomFields key={operation.operationId} operation={operation} definitions={customFields} onSave={onSaveCustomFields} />
             <Field label="Request builder document" hint="Paste or describe the request, then apply it to refresh recognized fields. Values are never sent automatically.">
-              <textarea
+              <AutoGrowTextarea
                 className="request-document"
                 rows={3}
                 value={requestDocument}
