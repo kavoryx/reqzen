@@ -10,6 +10,7 @@ const crypto = require('crypto');
 const { checkRun, scrubToken } = require('./lib/runPolicy');
 const { platformWindowOptions } = require('./lib/windowOptions');
 const aiRedaction = require('./lib/aiRedaction');
+const aiFeatures = require('./lib/aiFeatures');
 const { send } = require('./lib/httpRun');
 const confirmations = require('./lib/confirmations');
 const githubScan = require('./lib/githubScan');
@@ -596,7 +597,7 @@ const savedDocSettings = () => {
     const settings = data && typeof data === 'object' ? data : {};
     aiRedaction.registerSensitiveValues(settings);
     if (docProviderFor(settings) === 'local') ollama.configure(settings);
-    return settings;
+    return { ...settings, aiFeatures: aiFeatures.sanitize(settings.aiFeatures) };
   } catch {
     return {};
   }
@@ -666,6 +667,9 @@ function docChat(signal) {
 
 /** Whether a model is ready to write descriptions, with the reason when it is not. */
 async function modelReady() {
+  if (!aiFeatures.enabled(savedDocSettings(), 'documentation')) {
+    return { ok: false, reason: 'AI documentation is disabled in Settings. Creating factual descriptions from the API contract.' };
+  }
   if (docProvider() === 'claude') {
     return activeApiKey() ? { ok: true } : { ok: false, reason: 'No API key is set for this session. Enter one in AI settings, or choose another provider.' };
   }
@@ -726,6 +730,10 @@ ipcMain.handle('docs:get', () => ({
   defaultInstructions: docAgent.DEFAULT_INSTRUCTIONS,
   externalPrompts: docAgent.externalPrompts(docInstructions('manual')),
   generateAfterScan: generateAfterScanSaved(),
+  aiFeatures: aiFeatures.sanitize(savedDocSettings().aiFeatures),
+  requestPlanningInstructions: typeof savedDocSettings().requestPlanningInstructions === 'string'
+    ? savedDocSettings().requestPlanningInstructions
+    : '',
   hasKey: activeApiKey() !== '',
   baseUrl: docProvider() === 'openai' ? openaiSettings().baseUrl : (docProvider() === 'local' ? savedDocSettings().baseUrl || 'http://127.0.0.1:11434' : ''),
   model: docProvider() === 'openai' ? openaiSettings().model : (savedDocSettings().model || ''),
@@ -753,6 +761,16 @@ ipcMain.handle('docs:settings', (_event, input) => {
       if (text === '') delete next[key];
       else next[key] = text;
     }
+    if (input && input.aiFeatures && typeof input.aiFeatures === 'object') {
+      next.aiFeatures = aiFeatures.sanitize(input.aiFeatures);
+    } else if (!current.aiFeatures) {
+      next.aiFeatures = aiFeatures.sanitize(null);
+    }
+    if (input && typeof input.requestPlanningInstructions === 'string') {
+      const text = input.requestPlanningInstructions.trim().slice(0, 3000);
+      if (text === '') delete next.requestPlanningInstructions;
+      else next.requestPlanningInstructions = text;
+    }
   }
   if (input && typeof input.generateAfterScan === 'boolean') next.generateAfterScan = input.generateAfterScan;
   fs.mkdirSync(path.dirname(docSettingsFile), { recursive: true });
@@ -766,6 +784,7 @@ ipcMain.handle('docs:settings', (_event, input) => {
     instructions: docInstructions('manual'),
     afterScanInstructions: docInstructions('auto'),
     generateAfterScan: generateAfterScanSaved(),
+    aiFeatures: aiFeatures.sanitize(next.aiFeatures),
     baseUrl: openaiSettings().baseUrl,
     model: openaiSettings().model,
   };
@@ -829,6 +848,9 @@ ipcMain.handle('docs:generate', async (_event, input) => {
 
 ipcMain.handle('docs:overview', async (_event, input) => {
   if (!docsFile) return { ok: false, problem: 'The app is not ready yet.' };
+  if (!aiFeatures.enabled(savedDocSettings(), 'documentation')) {
+    return { ok: false, problem: 'AI documentation is turned off in Settings → AI model and provider.' };
+  }
   const serviceName = input && typeof input.serviceName === 'string' ? input.serviceName.slice(0, 100) : '';
   const ops = Array.isArray(input && input.operations) ? input.operations.slice(0, 200) : [];
   if (serviceName === '' || ops.length === 0) return { ok: false, problem: 'No APIs for this service.' };
@@ -859,6 +881,9 @@ ipcMain.handle('assist:rank', async (_event, input) => {
 
 // The search agents: Supervisor decides, Discovery ranks. The page sends the question and the offline candidates.
 ipcMain.handle('agent:search', async (_event, input) => {
+  if (!aiFeatures.enabled(savedDocSettings(), 'search')) {
+    return { ok: false, problem: 'AI catalog suggestions are turned off in Settings → AI model and provider.' };
+  }
   aiRedaction.registerSensitiveValues(input);
   const candidates = Array.isArray(input && input.candidates) ? input.candidates : [];
   const question = input && typeof input.question === 'string' ? input.question : '';
@@ -876,12 +901,17 @@ ipcMain.handle('agent:search', async (_event, input) => {
 });
 
 ipcMain.handle('assist:plan', async (_event, input) => {
+  if (!aiFeatures.enabled(savedDocSettings(), 'requestPlanning')) {
+    return { ok: false, problem: 'AI request planning is turned off in Settings → AI model and provider.' };
+  }
   aiRedaction.registerSensitiveValues(input);
   if (!input || typeof input.description !== 'string' || input.description.trim() === '' || !input.operation) {
     return { ok: false, problem: 'Describe the call first.' };
   }
   try {
     const prompt = assist.planPrompt(input.description, input.operation);
+    const instructions = String(savedDocSettings().requestPlanningInstructions || '').trim();
+    if (instructions) prompt.user += `\n\nWorkspace instructions: ${assist.redact(instructions)}`;
     const text = await docChat().chat(prompt.system, prompt.user);
     return { ok: true, ...assist.parsePlan(text, input.operation, input.description) };
   } catch (e) {

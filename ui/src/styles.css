@@ -488,6 +488,13 @@ input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--accent);
 .scan-rule-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 10px; margin-bottom: 4px; }
 .scan-rule-toolbar .field { margin-bottom: 0; }
 .token-generator { display: grid; gap: 7px; margin: 11px 0; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-subtle); }
+.custom-api-fields { display: block; padding: 0; }
+.custom-api-fields > summary { display: flex; min-height: 46px; align-items: center; justify-content: space-between; gap: 10px; padding: 10px; list-style: none; cursor: pointer; }
+.custom-api-fields > summary::-webkit-details-marker { display: none; }
+.custom-api-fields > summary > span:first-child { display: grid; gap: 2px; }
+.custom-api-fields > summary > span:last-child { color: var(--muted); transition: transform 140ms ease; }
+.custom-api-fields[open] > summary > span:last-child { transform: rotate(180deg); }
+.custom-api-fields-body { display: grid; gap: 7px; padding: 0 10px 10px; border-top: 1px solid var(--border); }
 .token-generator-head strong { display: block; font-size: 11px; }
 .token-generator-head small { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; }
 .token-generator-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
@@ -567,9 +574,14 @@ input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--accent);
 .services-expand { z-index: 2; width: 22px; height: 30px; flex: 0 0 22px; margin: 18px -19px 0 0; border: 1px solid var(--border); border-radius: 0 5px 5px 0; background: var(--surface); color: var(--accent); cursor: pointer; box-shadow: var(--shadow-1); }
 .services-right .services-expand { margin: 18px 0 0 -19px; border-radius: 5px 0 0 5px; }
 .operation-list { flex: 1; }
-.operation-table { min-width: 0; }
+.operation-table { min-width: 0; overflow-x: auto; }
 .operation-table-head, .operation-row { display: grid; grid-template-columns: 62px minmax(160px, 1.2fr) minmax(100px, .8fr) minmax(150px, 1fr) 64px; gap: 12px; align-items: center; }
 .operation-table-head { min-height: 30px; padding: 0 12px; border: 1px solid var(--border); border-bottom: 0; border-radius: var(--radius-control) var(--radius-control) 0 0; background: var(--accent); color: #fff; font-size: 9px; font-weight: 750; text-transform: uppercase; letter-spacing: .35px; }
+.catalog-column-heading { position: relative; display: flex; min-width: 0; align-items: center; justify-content: space-between; overflow: hidden; padding-right: 8px; }
+.catalog-column-heading > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.column-resizer { position: absolute; top: 0; right: -3px; width: 7px; height: 100%; cursor: col-resize; touch-action: none; }
+.column-resizer::after { position: absolute; top: 5px; right: 3px; bottom: 5px; width: 1px; background: color-mix(in srgb, white 42%, transparent); content: ""; transition: background 120ms ease, width 120ms ease; }
+.column-resizer:hover::after, .column-resizer:focus-visible::after { width: 2px; background: #fff; }
 .operation-row { width: 100%; min-height: 58px; }
 .operation-table .operation-row:first-child { border-radius: 0; }
 .operation-path { display: flex; min-width: 0; align-items: center; gap: 6px; }
@@ -636,6 +648,10 @@ input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--accent);
 .request-section-head p { margin: 4px 0 0; color: var(--muted); font-size: 9px; }
 .request-section .field { margin: 11px 0; }
 .request-document { min-height: 76px; resize: vertical; line-height: 1.5; }
+.request-document-actions { display: flex; align-items: center; gap: 10px; margin: -3px 0 13px; }
+.request-document-actions small { color: var(--muted); font-size: 9px; line-height: 1.4; }
+.ai-workflow-settings { margin: 4px 0 17px; padding: 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-subtle); }
+.ai-workflow-settings .card-title-row { margin-bottom: 8px; }
 .response-status { border-radius: 5px; padding: 5px 7px; font-size: 9px; font-weight: 750; }
 .response-status.ok { background: var(--success-soft); color: var(--success); }
 .response-status.bad { background: var(--danger-soft); color: var(--danger); }

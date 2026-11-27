@@ -94,6 +94,8 @@ test('strict entity matching supports nested paths while preferring the final re
   ];
   assert.deepEqual(rankApiSearch('get pools for orgId ce080c13-da92-4e54-b375-517875018920', rows)
     .map(({ candidate }) => candidate.id), ['org-pools']);
+  assert.deepEqual(rankApiSearch('get all pools by orgId 123243456', rows)
+    .map(({ candidate }) => candidate.id), ['org-pools']);
 });
 
 test('request documents populate parameter fields from natural language', async () => {
@@ -109,6 +111,18 @@ test('request documents populate parameter fields from natural language', async 
   assert.deepEqual(
     requestValuesFromDocument('orgId=org-7&poolId=pool-42', ['orgId', 'poolId']),
     { orgId: 'org-7', poolId: 'pool-42' },
+  );
+  assert.deepEqual(
+    requestValuesFromDocument('get all pools by org ce080c13-da92-4e54-b375-517875018920', ['orgId', 'poolId']),
+    { orgId: 'ce080c13-da92-4e54-b375-517875018920' },
+  );
+  assert.deepEqual(
+    requestValuesFromDocument('get all pools by org_id ce080c13-da92-4e54-b375-517875018920', ['orgId']),
+    { orgId: 'ce080c13-da92-4e54-b375-517875018920' },
+  );
+  assert.deepEqual(
+    requestValuesFromDocument('get all pools by orgId=123243456', ['org']),
+    { org: '123243456' },
   );
   assert.deepEqual(
     updateRequestValuesFromDocument(
