@@ -39,6 +39,19 @@ test('parses safe external-agent JSON transport variants without weakening snaps
   assert.equal(parseJsonDocument('{"unterminated":'), null);
 });
 
+test('import mode initially shows every custom field without changing persisted visibility by default', () => {
+  const withHiddenFields = {
+    ...snapshot,
+    customFieldDefinitions: [
+      { key: 'owner', label: 'Owner' },
+      { key: 'tier', label: 'Tier', visible: false },
+    ],
+  };
+  const text = JSON.stringify(withHiddenFields);
+  assert.match(parseSnapshot(text).problem, /visibility/);
+  assert.ok(parseSnapshot(text, { showAllFields: true }).snapshot.customFieldDefinitions.every((field) => field.visible === true));
+});
+
 test('normalizes service-nested Reqzen exports into the canonical snapshot shape', () => {
   const external = {
     format: 'reqzen-snapshot',

@@ -45,6 +45,24 @@ test('ids are stable across scans', () => {
   assert.deepEqual(a, b);
 });
 
+test('OpenAPI extensions hide APIs without losing deprecation status', () => {
+  const r = convertOpenApi3({
+    openapi: '3.0.1',
+    info: { title: 'Hidden', version: 'v1' },
+    paths: {
+      '/old': {
+        get: {
+          deprecated: true,
+          'x-internal': true,
+          responses: {},
+        },
+      },
+    },
+  }, { serviceName: 'sample', source: 'sample' });
+  assert.equal(r.operations[0].visibility, 'HIDDEN');
+  assert.equal(r.operations[0].lifecycleStatus, 'DEPRECATED');
+});
+
 test('a Swagger 2 document is not converted', () => {
   const r = convertOpenApi3({ swagger: '2.0', paths: {} }, { serviceName: 'x', source: 's' });
   assert.equal(r.operations.length, 0);

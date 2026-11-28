@@ -193,7 +193,9 @@ function FullTextPreview() {
       const target = event.target;
       if (!(target instanceof HTMLElement) || target.closest('.full-text-preview')) return;
       if (target instanceof HTMLInputElement && target.type === 'password') return;
-      const element = target.matches('input, textarea, select, code, small, strong, span, p, label')
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement
+        || target.isContentEditable) return;
+      const element = target.matches('code, small, strong, span, p, label')
         ? target
         : target.closest<HTMLElement>('code, small, strong, span, p, label');
       if (!element) return;
@@ -460,18 +462,16 @@ function MethodBadge({ method }: { method: string }) {
 }
 
 function OperationStatusBadges({ operation }: { operation: Operation }) {
-  const visibility = operation.visibility === 'HIDDEN' ? 'Hidden'
-    : operation.visibility === 'INTERNAL' ? 'Internal'
-      : null;
+  const hidden = operation.visibility === 'HIDDEN' || operation.visibility === 'INTERNAL';
   const deprecated = operation.lifecycleStatus === 'DEPRECATED';
-  if (!visibility && !deprecated) return null;
+  if (!hidden && !deprecated) return null;
 
   return (
     <span className="operation-status-badges" aria-label="API status">
-      {visibility && (
-        <span className={`operation-status operation-status-${visibility.toLowerCase()}`} title={`${visibility} API`}>
-          <span aria-hidden="true">{visibility === 'Hidden' ? '◌' : '◇'}</span>
-          {visibility}
+      {hidden && (
+        <span className="operation-status operation-status-hidden" title="Hidden API">
+          <span aria-hidden="true">◌</span>
+          Hidden
         </span>
       )}
       {deprecated && (
