@@ -25,6 +25,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - name: Verify release configuration
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+        run: npm run release:verify
       - name: Build unsigned Windows installer
         run: npm run dist:win
         env:
@@ -49,6 +53,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - name: Verify release configuration
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+        run: npm run release:verify
       - name: Build unsigned macOS installer
         run: npm run dist:mac -- --${{ matrix.arch }}
         env:
@@ -66,6 +74,9 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
       - uses: actions/download-artifact@v4
         with:
           name: windows-installer
@@ -81,15 +92,9 @@ jobs:
       - name: Verify release tag matches package version
         env:
           RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
-        run: node -e "if ('v' + require('./package.json').version !== process.env.RELEASE_TAG) { console.error('Release tag must match the package version.'); process.exit(1); }"
+        run: npm run release:verify
       - name: Label installers by platform
-        env:
-          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
-        run: |
-          version="${RELEASE_TAG#v}"
-          mv "release-assets/windows/Reqzen-${version}-x64.exe" "release-assets/windows/Reqzen-Windows-${version}-x64.exe"
-          mv "release-assets/macos-arm64/Reqzen-${version}-arm64.dmg" "release-assets/macos-arm64/Reqzen-macOS-Apple-Silicon-${version}-arm64.dmg"
-          mv "release-assets/macos-x64/Reqzen-${version}-x64.dmg" "release-assets/macos-x64/Reqzen-macOS-Intel-${version}-x64.dmg"
+        run: node scripts/release-config.cjs label release-assets
       - name: Publish installers to GitHub Releases
         env:
           GH_TOKEN: ${{ github.token }}
