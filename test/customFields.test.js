@@ -39,3 +39,28 @@ test('malformed field definitions, values and operation references are rejected'
   assert.throws(() => fields.applyMetadata(snapshot, valid, { one: { owner: 'x'.repeat(1001) } }), /invalid/);
   assert.match(validateSnapshot({ ...snapshot, customFieldDefinitions: valid, operations: [{ ...snapshot.operations[0], customFields: { owner: 42 } }] }), /invalid value/);
 });
+
+test('API explorer field configuration round-trips independently of custom values', () => {
+  const fieldDefinitions = [
+    { kind: 'operation', key: 'httpMethod', label: 'Verb', visible: false },
+    { kind: 'operation', key: 'x-source.url', label: 'Source URL', visible: true },
+    { kind: 'custom', key: 'owner', label: 'Maintainer', visible: true },
+  ];
+  const updated = fields.applyMetadata(
+    snapshot,
+    [{ key: 'owner', label: 'Maintainer', visible: true }],
+    { one: { owner: 'Platform' } },
+    fieldDefinitions,
+  );
+  assert.deepEqual(updated.apiFieldDefinitions, fieldDefinitions);
+  const exported = buildCatalog({ snapshot: updated });
+  assert.deepEqual(JSON.parse(JSON.stringify(exported)).apiFieldDefinitions, fieldDefinitions);
+  assert.equal(validateSnapshot(exported), '');
+  assert.match(fields.validateApiFieldDefinitions([
+    ...fieldDefinitions,
+    { kind: 'operation', key: 'httpMethod', label: 'Duplicate', visible: true },
+  ]), /duplicated/);
+  assert.match(fields.validateApiFieldDefinitions([
+    { kind: 'unknown', key: 'method', label: 'Method', visible: true },
+  ]), /valid kind/);
+});

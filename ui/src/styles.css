@@ -436,7 +436,12 @@ code, pre, kbd { font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas
 .share-items { display: grid; max-height: 135px; gap: 6px; overflow: auto; font-size: 11px; }
 .share-items label { display: flex; align-items: center; gap: 6px; }
 .custom-fields-list { display: grid; gap: 7px; }
-.custom-field-row { display: flex; align-items: center; gap: 10px; padding: 8px; border: 1px solid var(--border); border-radius: 6px; }
+.custom-field-row { display: flex; align-items: center; gap: 10px; padding: 8px; border: 1px solid var(--border); border-radius: 6px; transition: opacity 120ms ease, border-color 120ms ease; }
+.custom-field-row.dragging, .catalog-column-heading.dragging { opacity: .45; }
+.field-drag-handle { flex: 0 0 auto; color: var(--soft); cursor: grab; font-size: 14px; }
+.field-order-actions { display: flex; flex: 0 0 auto !important; gap: 4px; }
+.field-order-actions button { width: 28px; min-height: 26px; padding: 0; border: 1px solid var(--border); border-radius: 5px; background: var(--surface-2); color: var(--text); cursor: pointer; }
+.field-order-actions button:disabled { color: var(--soft); cursor: default; opacity: .45; }
 .custom-field-row > div { flex: 1; min-width: 0; }
 .custom-field-row strong, .custom-field-row small { display: block; }
 .custom-field-row small { color: var(--muted); }
@@ -600,7 +605,7 @@ input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--accent);
 .operation-table { min-width: 0; overflow-x: auto; }
 .operation-table-head, .operation-row { display: grid; grid-template-columns: 62px minmax(160px, 1.2fr) minmax(100px, .8fr) minmax(150px, 1fr) 64px; gap: 12px; align-items: center; }
 .operation-table-head { min-height: 30px; padding: 0 12px; border: 1px solid var(--border); border-bottom: 0; border-radius: var(--radius-control) var(--radius-control) 0 0; background: var(--accent); color: #fff; font-size: 9px; font-weight: 750; text-transform: uppercase; letter-spacing: .35px; }
-.catalog-column-heading { position: relative; display: flex; min-width: 0; align-items: center; justify-content: space-between; overflow: hidden; padding-right: 8px; }
+.catalog-column-heading { position: relative; display: flex; min-width: 0; align-items: center; justify-content: space-between; overflow: hidden; padding-right: 8px; cursor: grab; transition: opacity 120ms ease; }
 .catalog-column-heading > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .column-resizer { position: absolute; top: 0; right: -3px; width: 7px; height: 100%; cursor: col-resize; touch-action: none; }
 .column-resizer::after { position: absolute; top: 5px; right: 3px; bottom: 5px; width: 1px; background: color-mix(in srgb, white 42%, transparent); content: ""; transition: background 120ms ease, width 120ms ease; }
