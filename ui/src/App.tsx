@@ -34,6 +34,9 @@ interface Operation {
   summary?: string;
   description?: string;
   schemaComplete?: boolean;
+  deprecated?: boolean;
+  hidden?: boolean;
+  internal?: boolean;
   visibility?: 'PUBLIC' | 'INTERNAL' | 'HIDDEN';
   lifecycleStatus?: 'ACTIVE' | 'DEPRECATED';
   definition?: Record<string, unknown>;
@@ -462,8 +465,14 @@ function MethodBadge({ method }: { method: string }) {
 }
 
 function OperationStatusBadges({ operation }: { operation: Operation }) {
-  const hidden = operation.visibility === 'HIDDEN' || operation.visibility === 'INTERNAL';
-  const deprecated = operation.lifecycleStatus === 'DEPRECATED';
+  const definition = record(operation.definition);
+  const detail = record(definition.operation);
+  const hidden = operation.visibility === 'HIDDEN' || operation.visibility === 'INTERNAL'
+    || operation.hidden === true || operation.internal === true
+    || detail.hidden === true || detail.internal === true
+    || detail['x-hidden'] === true || detail['x-internal'] === true;
+  const deprecated = operation.lifecycleStatus === 'DEPRECATED'
+    || operation.deprecated === true || detail.deprecated === true;
   if (!hidden && !deprecated) return null;
 
   return (
@@ -471,13 +480,13 @@ function OperationStatusBadges({ operation }: { operation: Operation }) {
       {hidden && (
         <span className="operation-status operation-status-hidden" title="Hidden API">
           <span aria-hidden="true">◌</span>
-          Hidden
+          HIDDEN
         </span>
       )}
       {deprecated && (
         <span className="operation-status operation-status-deprecated" title="Deprecated API">
           <span aria-hidden="true">!</span>
-          Deprecated
+          DEPRECATED
         </span>
       )}
     </span>

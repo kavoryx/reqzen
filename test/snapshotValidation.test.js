@@ -52,6 +52,21 @@ test('import mode initially shows every custom field without changing persisted 
   assert.ok(parseSnapshot(text, { showAllFields: true }).snapshot.customFieldDefinitions.every((field) => field.visible === true));
 });
 
+test('normalizes catalog deprecation and hidden indicators into status fields', () => {
+  const parsed = parseSnapshot(JSON.stringify({
+    ...snapshot,
+    operations: [{
+      ...operation,
+      deprecated: true,
+      hidden: true,
+      definition: { operation: { deprecated: true } },
+    }],
+  }));
+  assert.equal(parsed.problem, '');
+  assert.equal(parsed.snapshot.operations[0].lifecycleStatus, 'DEPRECATED');
+  assert.equal(parsed.snapshot.operations[0].visibility, 'HIDDEN');
+});
+
 test('normalizes service-nested Reqzen exports into the canonical snapshot shape', () => {
   const external = {
     format: 'reqzen-snapshot',
