@@ -8,11 +8,19 @@ const ACTIONS = {
 const METHOD_NAMES = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
 const IDENTIFIER_VALUES = /\b(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|[0-9a-z]+[0-9][0-9a-z_-]{15,})\b/gi;
 const LABELLED_IDENTIFIER_VALUES = /\b[a-z][a-z0-9_-]*id\b\s*(?:(?:=|:|\bis\b)\s*)?["']?[a-z0-9][a-z0-9._:/-]*["']?/gi;
+export const DEFAULT_SEARCH_INSTRUCTIONS = [
+  'Prioritize the requested action and its matching HTTP method.',
+  'Distinguish collection requests ("all" or "list") from single-resource requests ("one", "single", or "by ID").',
+  'Match the requested entity and API version to the operation path.',
+  '',
+  'Equivalent entity names (optional; one comma-separated or =-separated group per line):',
+].join('\n');
 export const DEFAULT_SEARCH_OPTIONS = Object.freeze({
   enforceIntent: true,
   strictEntity: true,
   distinguishGetAll: true,
   entityGroups: [],
+  instructions: DEFAULT_SEARCH_INSTRUCTIONS,
 });
 
 function stem(word) {
@@ -66,12 +74,35 @@ function entityGroupKeys(pathEntity, queryTerms, groups) {
 }
 
 function searchOptions(options) {
+  const instructions = typeof options?.instructions === 'string'
+    ? options.instructions
+    : DEFAULT_SEARCH_INSTRUCTIONS;
   return {
     enforceIntent: options?.enforceIntent !== false,
     strictEntity: options?.strictEntity !== false,
     distinguishGetAll: options?.distinguishGetAll !== false,
-    entityGroups: Array.isArray(options?.entityGroups) ? options.entityGroups : DEFAULT_SEARCH_OPTIONS.entityGroups,
+    entityGroups: [
+      ...entityGroupsFromInstructions(instructions),
+      ...(Array.isArray(options?.entityGroups) ? options.entityGroups : []),
+    ],
   };
+}
+
+export function entityGroupsFromInstructions(instructions) {
+  const lines = String(instructions || '').split(/\r?\n/);
+  const heading = lines.findIndex((line) =>
+    /^(?:equivalent(?:\s+entity)?\s+names|aliases?|alias\s+groups)\s*(?::|\()/i.test(line.trim()));
+  if (heading < 0) return [];
+  return [...new Set(lines.slice(heading + 1)
+    .map((line) => line.replace(/^\s*[-*]\s*/, '').trim())
+    .filter((line) => /[,=]/.test(line))
+    .map((line) => line.slice(0, 300))
+    .filter(Boolean))].slice(0, 50);
+}
+
+export function inApiSearchScope(operation, serviceId, serviceName = '') {
+  if (!serviceId) return true;
+  return operation.serviceId === serviceId || Boolean(serviceName && operation.serviceName === serviceName);
 }
 
 function parsedQuery(query) {

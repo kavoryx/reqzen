@@ -87,6 +87,35 @@ test('configured entity groups treat related names consistently', async () => {
   assert.deepEqual(rankApiSearch('fetch all products', rows, { entityGroups: [] }).map(({ candidate }) => candidate.id), ['product']);
 });
 
+test('one hint document provides entity aliases without separate controls', async () => {
+  const { entityGroupsFromInstructions, rankApiSearch } = await search;
+  const instructions = [
+    'Match exact method and entity.',
+    'Equivalent entity names:',
+    'vehicle, automobile',
+  ].join('\n');
+  const rows = [
+    { id: 'vehicle', method: 'GET', path: '/v1/vehicles' },
+    { id: 'order', method: 'GET', path: '/v1/orders' },
+  ];
+  assert.deepEqual(entityGroupsFromInstructions(instructions), ['vehicle, automobile']);
+  assert.deepEqual(rankApiSearch('get all automobiles', rows, { instructions })
+    .map(({ candidate }) => candidate.id), ['vehicle']);
+});
+
+test('search scope includes only the selected service', async () => {
+  const { inApiSearchScope } = await search;
+  const rows = [
+    { serviceId: 'inventory', serviceName: 'Inventory' },
+    { serviceId: 'orders', serviceName: 'Orders' },
+  ];
+  assert.equal(rows.filter((row) => inApiSearchScope(row, '')).length, 2);
+  assert.deepEqual(
+    rows.filter((row) => inApiSearchScope(row, 'orders', 'Orders')),
+    [rows[1]],
+  );
+});
+
 test('strict entity matching supports nested paths while preferring the final resource segment', async () => {
   const { rankApiSearch } = await search;
   const rows = [

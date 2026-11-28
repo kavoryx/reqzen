@@ -905,12 +905,14 @@ ipcMain.handle('agent:search', async (_event, input) => {
   }
   aiRedaction.registerSensitiveValues(input);
   const candidates = Array.isArray(input && input.candidates) ? input.candidates : [];
+  const instructions = input && typeof input.instructions === 'string' ? input.instructions.slice(0, 6000) : '';
   const question = input && typeof input.question === 'string' ? input.question : '';
   if (question.trim() === '') return { ok: false, problem: 'Type a question first.' };
   try {
     const result = await agents.runAgents({
       question,
       candidates,
+      instructions,
       chat: docChat().chat,
     });
     return { ok: true, ...result };
