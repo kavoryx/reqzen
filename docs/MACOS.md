@@ -22,7 +22,7 @@ The Git check is optional. If Node.js was installed while Terminal was open, clo
 Clone the public repository and enter its folder:
 
 ```sh
-git clone https://github.com/manasranjanmhnt/reqzen.git
+git clone https://github.com/kavoryx/reqzen.git
 cd reqzen
 ```
 

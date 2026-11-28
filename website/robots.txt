@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://manasranjanmhnt.github.io/reqzen/sitemap.xml
+Sitemap: https://kavoryx.github.io/reqzen/sitemap.xml

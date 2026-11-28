@@ -7,8 +7,8 @@ import {
 } from './bridge';
 import { parseTokenCurl, tokenCurl, type TokenCurlConfig } from './tokenCurl.mjs';
 import {
-  combinedSearchScore, matchesApiSearchIntent, rankApiSearch, requestValuesFromDocument,
-  scoreApiSearch, updateRequestValuesFromDocument,
+  combinedSearchScore, DEFAULT_SEARCH_INSTRUCTIONS, inApiSearchScope, matchesApiSearchIntent,
+  rankApiSearch, requestValuesFromDocument, scoreApiSearch, updateRequestValuesFromDocument,
 } from './apiSearch.mjs';
 
 type View = 'home' | 'catalog' | 'collections' | 'settings';
@@ -106,10 +106,7 @@ interface Preferences {
   acceptAllIncompleteContracts: boolean;
   acceptedIncompleteServices: string[];
   apiSearch: {
-    enforceIntent: boolean;
-    strictEntity: boolean;
-    distinguishGetAll: boolean;
-    entityGroups: string[];
+    instructions: string;
   };
 }
 
@@ -168,10 +165,7 @@ const defaultPreferences: Preferences = {
   acceptAllIncompleteContracts: false,
   acceptedIncompleteServices: [],
   apiSearch: {
-    enforceIntent: true,
-    strictEntity: true,
-    distinguishGetAll: true,
-    entityGroups: [],
+    instructions: DEFAULT_SEARCH_INSTRUCTIONS,
   },
 };
 
@@ -1052,12 +1046,9 @@ function App() {
           acceptAllIncompleteContracts: saved.acceptAllIncompleteContracts === true,
           acceptedIncompleteServices: arrayOf<string>(saved.acceptedIncompleteServices),
           apiSearch: {
-            enforceIntent: savedSearch.enforceIntent !== false,
-            strictEntity: savedSearch.strictEntity !== false,
-            distinguishGetAll: savedSearch.distinguishGetAll !== false,
-            entityGroups: Array.isArray(savedSearch.entityGroups)
-              ? arrayOf<string>(savedSearch.entityGroups).filter((value) => value.trim())
-              : [...defaultPreferences.apiSearch.entityGroups],
+            instructions: typeof savedSearch.instructions === 'string'
+              ? savedSearch.instructions
+              : defaultPreferences.apiSearch.instructions,
           },
         });
         void desktop.setTextScale(textScale).then((result) => {
@@ -1280,7 +1271,13 @@ function App() {
       };
     });
   }, [docsSettings.docs, snapshot]);
-  const searchCandidates = useMemo(() => documentedOperations.map((operation) => ({
+  const scopedOperations = useMemo(() => {
+    if (!selectedService) return documentedOperations;
+    const selectedName = snapshot?.services.find((service) => service.serviceId === selectedService)?.name;
+    return documentedOperations.filter((operation) =>
+      inApiSearchScope(operation, selectedService, selectedName));
+  }, [documentedOperations, selectedService, snapshot?.services]);
+  const searchCandidates = useMemo(() => scopedOperations.map((operation) => ({
     id: operation.operationId,
     method: operation.httpMethod,
     path: operation.pathTemplate,
@@ -1292,7 +1289,7 @@ function App() {
       const value = operation.customFields?.[field.key];
       return value ? `${field.label} ${value}` : '';
     }).join(' '),
-  })), [documentedOperations, snapshot?.customFieldDefinitions]);
+  })), [scopedOperations, snapshot?.customFieldDefinitions]);
 
   const runAiSearch = useCallback(async (question = search) => {
     const normalized = question.trim();
@@ -1305,7 +1302,11 @@ function App() {
       const rankedIds = new Set(ranked.map((candidate) => candidate.id));
       const allowed = searchCandidates.filter((candidate) => matchesApiSearchIntent(normalized, candidate, preferences.apiSearch));
       const candidates = [...ranked, ...allowed.filter((candidate) => !rankedIds.has(candidate.id))].slice(0, 40);
-      const raw = record(await desktop.askAgents({ question: normalized, candidates }));
+      const raw = record(await desktop.askAgents({
+        question: normalized,
+        candidates,
+        instructions: preferences.apiSearch.instructions,
+      }));
       if (sequence !== aiSearchSequence.current || normalized !== latestSearch.current.trim() || snapshot !== latestSnapshot.current) return;
       const problem = resultError(raw);
       if (problem) throw new Error(problem);
@@ -1340,7 +1341,7 @@ function App() {
     const normalized = search.trim();
     const apiTerms = normalized.toLowerCase().split(/\s+/).filter(Boolean);
     const aiRank = new Map(aiSearchIds.map((id, index) => [id, index]));
-    return documentedOperations.map((operation, index) => ({
+    return scopedOperations.map((operation, index) => ({
       operation,
       index,
       score: normalized ? scoreApiSearch(normalized, searchCandidates[index], preferences.apiSearch) : 0,
@@ -1354,11 +1355,9 @@ function App() {
         ...Object.values(operation.customFields || {}),
       ].join(' ').toLowerCase().includes(term)),
     })).filter(({ operation, index, score, directMatch }) => {
-      const matchesService = !selectedService || operation.serviceId === selectedService
-        || operation.serviceName === snapshot?.services.find((service) => service.serviceId === selectedService)?.name;
       const allowedByAi = aiRank.has(operation.operationId)
         && matchesApiSearchIntent(normalized, searchCandidates[index], preferences.apiSearch);
-      return matchesService && (!normalized || directMatch || score > 0 || allowedByAi);
+      return !normalized || directMatch || score > 0 || allowedByAi;
     }).sort((left, right) => {
       const leftRank = aiRank.get(left.operation.operationId);
       const rightRank = aiRank.get(right.operation.operationId);
@@ -1366,7 +1365,7 @@ function App() {
       const leftScore = combinedSearchScore(left.score + (left.directMatch ? 1 : 0), leftRank);
       return rightScore - leftScore || left.index - right.index;
     }).map(({ operation }) => operation);
-  }, [aiSearchIds, documentedOperations, preferences.apiSearch, searchCandidates, search, selectedService, snapshot]);
+  }, [aiSearchIds, preferences.apiSearch, scopedOperations, searchCandidates, search]);
 
   useEffect(() => {
     if (!selectedOperation?.revisionId) return;
@@ -3941,41 +3940,23 @@ function Settings({
           {section === 'api-search' && (
             <section className="settings-card">
               <div className="card-title-row">
-                <div><h2>API search hints</h2><p>Constrain natural-language results by action, HTTP method, and API entity.</p></div>
+                <div><h2>API search hints</h2><p>Describe how natural-language searches should understand your API catalog.</p></div>
                 <Button type="button" onClick={() => onPreferences({ apiSearch: { ...defaultPreferences.apiSearch } })}>Reset defaults</Button>
               </div>
-              <label className="check-row">
-                <input type="checkbox" checked={preferences.apiSearch.enforceIntent} onChange={(event) => onPreferences({
-                  apiSearch: { ...preferences.apiSearch, enforceIntent: event.target.checked },
-                })} />
-                <span><strong>Honor search actions</strong><small>Fetch/Get/By ID limits to GET, update limits to PUT or PATCH, PATCH limits to PATCH, and delete limits to DELETE.</small></span>
-              </label>
-              <label className="check-row">
-                <input type="checkbox" checked={preferences.apiSearch.distinguishGetAll} disabled={!preferences.apiSearch.enforceIntent} onChange={(event) => onPreferences({
-                  apiSearch: { ...preferences.apiSearch, distinguishGetAll: event.target.checked },
-                })} />
-                <span><strong>Distinguish get-all from get-by-ID</strong><small>“Get all” excludes item paths, while “by ID” requires a path parameter.</small></span>
-              </label>
-              <label className="check-row">
-                <input type="checkbox" checked={preferences.apiSearch.strictEntity} disabled={!preferences.apiSearch.enforceIntent} onChange={(event) => onPreferences({
-                  apiSearch: { ...preferences.apiSearch, strictEntity: event.target.checked },
-                })} />
-                <span><strong>Use the entity after the API version</strong><small>For paths such as /v2/resources/:resourceId, only results for the requested entity are shown.</small></span>
-              </label>
-              <Field label="Equivalent entity names" hint="One equivalence group per line. Separate related names with commas or =.">
+              <Field label="Search guidance" hint="Edit the defaults, change the wording, or add details and equivalent entity names.">
                 <textarea
-                  rows={5}
-                  value={preferences.apiSearch.entityGroups.join('\n')}
-                  aria-label="Equivalent entity names"
+                  className="search-hints-editor"
+                  rows={10}
+                  maxLength={6000}
+                  value={preferences.apiSearch.instructions}
+                  aria-label="API search guidance"
+                  aria-describedby="api-search-scope"
                   onChange={(event) => onPreferences({
-                    apiSearch: {
-                      ...preferences.apiSearch,
-                      entityGroups: event.target.value.split('\n'),
-                    },
+                    apiSearch: { instructions: event.target.value },
                   })}
                 />
               </Field>
-              <div className="privacy-note">Add optional groups such as equivalent singular, plural, or alternate resource names. Blank lines are removed when saved.</div>
+              <div id="api-search-scope" className="privacy-note">Search is limited to the currently selected service or All services. Generic path, method, version, and entity matching stays active; free-form details guide AI-assisted ranking.</div>
             </section>
           )}
           {section === 'contracts' && (

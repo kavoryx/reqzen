@@ -20,6 +20,7 @@ const localScan = require('./lib/localScan');
 const projectFinder = require('./lib/projectFinder');
 const catalogExport = require('./lib/catalogExport');
 const { parseSnapshot } = require('./lib/snapshotValidation');
+const { nextZoomFactor, zoomAction } = require('./lib/zoomShortcuts');
 const customFields = require('./lib/customFields');
 const ollama = require('./lib/ollama');
 const openaiCompatible = require('./lib/openaiCompatible');
@@ -250,6 +251,12 @@ function createWindow() {
   // Find in page: Cmd+F (Ctrl+F elsewhere) opens the find bar in the page. Edit roles keep copy and paste working.
   const sendToPage = (channel, ...args) => { if (!win.isDestroyed()) win.webContents.send(channel, ...args); };
   win.webContents.on('found-in-page', (_event, result) => sendToPage('find:result', { active: result.activeMatchOrdinal, total: result.matches }));
+  win.webContents.on('before-input-event', (event, input) => {
+    const action = zoomAction(input, process.platform);
+    if (!action) return;
+    event.preventDefault();
+    win.webContents.setZoomFactor(nextZoomFactor(win.webContents.getZoomFactor(), action));
+  });
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     ...(process.platform === 'darwin' ? [{
       label: app.name,
@@ -315,7 +322,10 @@ function createWindow() {
       submenu: [
         { role: 'reload' }, { role: 'forceReload' }, { role: 'toggleDevTools' },
         { type: 'separator' },
-        { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { role: 'togglefullscreen' },
+        { role: 'resetZoom', accelerator: 'CmdOrCtrl+0' },
+        { role: 'zoomIn', accelerator: 'CmdOrCtrl+=' },
+        { role: 'zoomOut', accelerator: 'CmdOrCtrl+-' },
+        { role: 'togglefullscreen' },
       ],
     },
     {
@@ -905,12 +915,14 @@ ipcMain.handle('agent:search', async (_event, input) => {
   }
   aiRedaction.registerSensitiveValues(input);
   const candidates = Array.isArray(input && input.candidates) ? input.candidates : [];
+  const instructions = input && typeof input.instructions === 'string' ? input.instructions.slice(0, 6000) : '';
   const question = input && typeof input.question === 'string' ? input.question : '';
   if (question.trim() === '') return { ok: false, problem: 'Type a question first.' };
   try {
     const result = await agents.runAgents({
       question,
       candidates,
+      instructions,
       chat: docChat().chat,
     });
     return { ok: true, ...result };

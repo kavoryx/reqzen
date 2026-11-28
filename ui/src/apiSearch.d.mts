@@ -9,12 +9,20 @@ export interface SearchCandidate {
   metadata?: string;
 }
 export interface SearchOptions {
+  instructions?: string;
   enforceIntent?: boolean;
   strictEntity?: boolean;
   distinguishGetAll?: boolean;
   entityGroups?: string[];
 }
+export interface SearchOperation {
+  serviceId?: string;
+  serviceName?: string;
+}
 export const DEFAULT_SEARCH_OPTIONS: Required<SearchOptions>;
+export const DEFAULT_SEARCH_INSTRUCTIONS: string;
+export function entityGroupsFromInstructions(instructions: string): string[];
+export function inApiSearchScope(operation: SearchOperation, serviceId: string, serviceName?: string): boolean;
 export function matchesApiSearchIntent(query: string, operation: SearchCandidate, options?: SearchOptions): boolean;
 export function scoreApiSearch(query: string, operation: SearchCandidate, options?: SearchOptions): number;
 export function rankApiSearch<T extends SearchCandidate>(query: string, candidates: T[], options?: SearchOptions): Array<{ candidate: T; index: number; score: number }>;

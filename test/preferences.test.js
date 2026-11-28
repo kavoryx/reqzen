@@ -46,7 +46,14 @@ test('shortcut and contract approval preferences are sanitized', () => {
   assert.deepEqual(value.acceptedIncompleteServices, ['Orders']);
 });
 
-test('API search settings retain valid controls and remove empty alias rows', () => {
+test('API search settings retain editable guidance and migrate legacy alias groups', () => {
+  assert.deepEqual(prefs.sanitize({
+    apiSearch: {
+      instructions: '  Prefer collection endpoints.\nitem, resource  ',
+    },
+  }).apiSearch, {
+    instructions: '  Prefer collection endpoints.\nitem, resource  ',
+  });
   const value = prefs.sanitize({
     apiSearch: {
       enforceIntent: false,
@@ -56,9 +63,6 @@ test('API search settings retain valid controls and remove empty alias rows', ()
     },
   });
   assert.deepEqual(value.apiSearch, {
-    enforceIntent: false,
-    strictEntity: true,
-    distinguishGetAll: false,
-    entityGroups: ['virtual machine, vm, invvm'],
+    instructions: `${prefs.SEARCH_INSTRUCTIONS}\nvirtual machine, vm, invvm`,
   });
 });

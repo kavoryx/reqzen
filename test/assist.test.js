@@ -21,8 +21,9 @@ test('redact removes bearer tokens and key=value secrets', () => {
 });
 
 test('rank prompt includes the candidates and no secrets from the question', () => {
-  const p = rankPrompt('items for Bearer sekret', [{ id: 'a', method: 'GET', path: '/x', summary: 'List' }]);
+  const p = rankPrompt('items for Bearer sekret', [{ id: 'a', method: 'GET', path: '/x', summary: 'List' }], 'Prefer collection endpoints.');
   assert.ok(p.user.includes('a | GET /x | List'));
+  assert.ok(p.user.includes('Prefer collection endpoints.'));
   assert.ok(!p.user.includes('sekret'));
 });
 
