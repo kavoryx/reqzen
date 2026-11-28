@@ -385,6 +385,16 @@ code, pre, kbd { font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas
 .field > input, .field > select, .field > textarea, .field input, .field select, .field textarea { width: 100%; min-width: 0; min-height: 34px; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); outline: 0; background: var(--surface); color: var(--text); font-size: 11px; font-weight: 450; }
 .field textarea { resize: vertical; line-height: 1.5; }
 .field textarea.search-hints-editor { min-height: 180px; padding: 12px; font-size: 12px; line-height: 1.65; }
+.search-hint-guide { display: grid; gap: 10px; margin: 14px 0 4px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-subtle); }
+.search-hint-guide > div:first-child { display: grid; gap: 3px; }
+.search-hint-guide strong { font-size: 11px; }
+.search-hint-guide span { color: var(--muted); font-size: 10px; line-height: 1.45; }
+.search-hint-keywords { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.search-hint-keywords button { min-height: 26px; padding: 3px 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); cursor: pointer; font-size: 10px; }
+.search-hint-keywords button:hover { border-color: var(--accent-ring); background: var(--accent-soft); color: var(--accent); }
+.search-hint-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; }
+.search-hint-actions .button-row { margin: 0; }
+.search-hint-count { color: var(--muted); font-size: 10px; }
 .field small { color: var(--muted); font-size: 10px; font-weight: 450; line-height: 1.45; }
 .field input::placeholder, .field textarea::placeholder { color: var(--soft); }
 .segmented-control { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-subtle); }
@@ -865,6 +875,8 @@ input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--accent);
   .catalog-command textarea { flex-basis: calc(100% - 32px); }
   .catalog-command-action { width: 100%; margin-left: 32px; }
   .catalog-command-hint > span:last-child { display: none; }
+  .search-hint-actions { align-items: stretch; flex-direction: column; }
+  .search-hint-actions .button-row { justify-content: flex-end; }
   .environment-picker select,
   .prod-badge,
   .topbar-actions > .icon-button {
