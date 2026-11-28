@@ -103,6 +103,17 @@ test('one hint document provides entity aliases without separate controls', asyn
     .map(({ candidate }) => candidate.id), ['vehicle']);
 });
 
+test('inline alias hints provide reliable local entity matching', async () => {
+  const { entityGroupsFromInstructions, rankApiSearch } = await search;
+  const rows = [
+    { id: 'vehicle', method: 'GET', path: '/v1/vehicles' },
+  ];
+  const instructions = 'Aliases: vehicle, automobile, car';
+  assert.deepEqual(entityGroupsFromInstructions(instructions), ['vehicle, automobile, car']);
+  assert.deepEqual(rankApiSearch('get all cars', rows, { instructions })
+    .map(({ candidate }) => candidate.id), ['vehicle']);
+});
+
 test('search scope includes only the selected service', async () => {
   const { inApiSearchScope } = await search;
   const rows = [

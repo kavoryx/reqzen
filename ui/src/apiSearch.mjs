@@ -93,7 +93,8 @@ export function entityGroupsFromInstructions(instructions) {
   const heading = lines.findIndex((line) =>
     /^(?:equivalent(?:\s+entity)?\s+names|aliases?|alias\s+groups)\s*(?::|\()/i.test(line.trim()));
   if (heading < 0) return [];
-  return [...new Set(lines.slice(heading + 1)
+  const inline = lines[heading].match(/^[^:(]+:\s*(.+)$/)?.[1] || '';
+  return [...new Set([inline, ...lines.slice(heading + 1)]
     .map((line) => line.replace(/^\s*[-*]\s*/, '').trim())
     .filter((line) => /[,=]/.test(line))
     .map((line) => line.slice(0, 300))

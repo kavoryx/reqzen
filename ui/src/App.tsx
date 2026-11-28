@@ -192,6 +192,7 @@ function FullTextPreview() {
     const show = (event: Event) => {
       const target = event.target;
       if (!(target instanceof HTMLElement) || target.closest('.full-text-preview')) return;
+      if (target instanceof HTMLInputElement && target.type === 'password') return;
       const element = target.matches('input, textarea, select, code, small, strong, span, p, label')
         ? target
         : target.closest<HTMLElement>('code, small, strong, span, p, label');
@@ -3553,7 +3554,7 @@ function RequestDialog({
                 <Button type="button" onClick={() => { void generateToken(); }} disabled={!selectedTokenTypeId || !environment || generatingToken}>{generatingToken ? 'Generating…' : 'Generate token'}</Button>
               </div>
               <div className="token-input-row">
-                <input type="password" value={token} onChange={(event) => onToken(event.target.value)} autoComplete="off" placeholder="Generated or pasted access token" />
+                <input type="password" aria-label="Access token" spellCheck={false} value={token} onChange={(event) => onToken(event.target.value)} autoComplete="off" placeholder="Generated or pasted access token" />
                 <Button type="button" onClick={() => { void copyToken(); }} disabled={!token}>Copy</Button>
               </div>
               {tokenStatus && <small className={tokenStatus.toLowerCase().includes('successfully') || tokenStatus.toLowerCase().includes('copied') ? 'token-status success' : 'token-status'}>{tokenStatus}</small>}
@@ -3808,6 +3809,11 @@ function Settings({
   const [loadingModels, setLoadingModels] = useState(false);
   const [modelsError, setModelsError] = useState('');
   const [scanPreset, setScanPreset] = useState('spring');
+  const [searchInstructions, setSearchInstructions] = useState(preferences.apiSearch.instructions);
+  const searchInstructionsRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    setSearchInstructions(preferences.apiSearch.instructions);
+  }, [preferences.apiSearch.instructions]);
   useEffect(() => {
     setProvider(String(docsSettings.provider || 'local'));
     setProviderBaseUrl(String(docsSettings.baseUrl || ''));
@@ -3853,6 +3859,21 @@ function Settings({
   useEffect(() => {
     if (section === 'ai' && provider === 'local' && providerBaseUrl) void loadAvailableModels();
   }, [section, provider, providerBaseUrl]);
+  const insertSearchHint = (label: string, example: string) => {
+    const editor = searchInstructionsRef.current;
+    if (!editor) return;
+    const start = editor.selectionStart;
+    const end = editor.selectionEnd;
+    const separator = start > 0 && !searchInstructions.slice(0, start).endsWith('\n') ? '\n' : '';
+    const snippet = `${separator}${label}: ${example}`;
+    const next = `${searchInstructions.slice(0, start)}${snippet}${searchInstructions.slice(end)}`;
+    setSearchInstructions(next);
+    window.requestAnimationFrame(() => {
+      editor.focus();
+      const cursor = start + snippet.length;
+      editor.setSelectionRange(cursor, cursor);
+    });
+  };
   const nav: Array<{ id: SettingsSection; title: string; caption: string; icon: string }> = [
     { id: 'appearance', title: 'Appearance', caption: 'Theme and accent', icon: '◐' },
     { id: 'shortcuts', title: 'Keyboard shortcuts', caption: 'Customize key commands', icon: '⌘' },
@@ -3947,22 +3968,42 @@ function Settings({
             <section className="settings-card">
               <div className="card-title-row">
                 <div><h2>API search hints</h2><p>Describe how natural-language searches should understand your API catalog.</p></div>
-                <Button type="button" onClick={() => onPreferences({ apiSearch: { ...defaultPreferences.apiSearch } })}>Reset defaults</Button>
+                <Button type="button" onClick={() => {
+                  setSearchInstructions(defaultPreferences.apiSearch.instructions);
+                  onPreferences({ apiSearch: { ...defaultPreferences.apiSearch } });
+                }}>Reset defaults</Button>
               </div>
-              <Field label="Search guidance" hint="Edit the defaults, change the wording, or add details and equivalent entity names.">
+              <div className="search-hint-guide">
+                <div><strong>Write natural guidance</strong><span>Use short, specific statements. The editor is free-form and preserves normal cursor, selection, and keyboard editing behavior.</span></div>
+                <div className="search-hint-keywords" role="group" aria-label="Insert a search hint keyword">
+                  <span>Insert:</span>
+                  <button type="button" onClick={() => insertSearchHint('Action', 'Treat “find”, “fetch”, and “get” as the same request.')}>Action</button>
+                  <button type="button" onClick={() => insertSearchHint('Entity', '“customer” refers to the account resource.')}>Entity</button>
+                  <button type="button" onClick={() => insertSearchHint('Version', 'Prefer v2 unless another version is requested.')}>Version</button>
+                  <button type="button" onClick={() => insertSearchHint('Context', 'For billing searches, use the Payments service.')}>Context</button>
+                  <button type="button" onClick={() => insertSearchHint('Aliases', 'vehicle, automobile, car')}>Aliases</button>
+                </div>
+              </div>
+              <Field label="Search guidance" hint="Action, entity, version, context, and aliases are suggested labels—not a required format.">
                 <textarea
+                  ref={searchInstructionsRef}
                   className="search-hints-editor"
                   rows={10}
                   maxLength={6000}
-                  value={preferences.apiSearch.instructions}
+                  value={searchInstructions}
                   aria-label="API search guidance"
-                  aria-describedby="api-search-scope"
-                  onChange={(event) => onPreferences({
-                    apiSearch: { instructions: event.target.value },
-                  })}
+                  aria-describedby="api-search-scope api-search-count"
+                  onChange={(event) => setSearchInstructions(event.target.value)}
                 />
               </Field>
-              <div id="api-search-scope" className="privacy-note">Search is limited to the currently selected service or All services. Generic path, method, version, and entity matching stays active; free-form details guide AI-assisted ranking.</div>
+              <div className="search-hint-actions">
+                <span id="api-search-count" className="search-hint-count">{searchInstructions.length.toLocaleString()} / 6,000 characters</span>
+                <div className="button-row">
+                  <Button type="button" disabled={searchInstructions === preferences.apiSearch.instructions} onClick={() => setSearchInstructions(preferences.apiSearch.instructions)}>Discard changes</Button>
+                  <Button type="button" variant="primary" disabled={searchInstructions === preferences.apiSearch.instructions} onClick={() => onPreferences({ apiSearch: { instructions: searchInstructions } })}>Save guidance</Button>
+                </div>
+              </div>
+              <div id="api-search-scope" className="privacy-note">Search stays within the selected service, or All services. Method, version, and entity matching always use the catalog. For reliable local alias matching, keep an “Equivalent entity names:” section with comma- or equals-separated groups; other free-form guidance improves AI-assisted ranking when enabled.</div>
             </section>
           )}
           {section === 'contracts' && (
