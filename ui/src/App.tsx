@@ -1402,8 +1402,14 @@ function App() {
       }));
       setResponse(result);
       const message = resultError(result);
-      if (message) notify(message, 'error');
-      else notify(`Request completed with HTTP ${String(result.status)}.`, 'success');
+      const status = typeof result.status === 'number' ? result.status : null;
+      if (message) {
+        notify(message, 'error');
+      } else if (status !== null && status >= 200 && status < 300) {
+        notify(`Request completed with HTTP ${String(status)}.`, 'success');
+      } else {
+        notify(`Request failed with HTTP ${String(result.status ?? 'unknown')}.`, 'error');
+      }
     } catch (error) {
       notify(`The request could not be sent: ${errorMessage(error)}`, 'error');
     } finally {
@@ -3567,7 +3573,7 @@ function RequestDialog({
             )}
           </section>
           <section className="response-section" aria-live="polite">
-            <div className="request-section-head"><div><h3>Response</h3><p>Results are redacted before they are shown.</p></div>{response && typeof response.status === 'number' && <span className={`response-status ${response.status < 400 ? 'ok' : 'bad'}`}>{response.status} {response.status < 400 ? 'OK' : 'Error'}</span>}</div>
+            <div className="request-section-head"><div><h3>Response</h3><p>Results are redacted before they are shown.</p></div>{response && typeof response.status === 'number' && <span className={`response-status ${response.status >= 200 && response.status < 300 ? 'ok' : 'bad'}`}>{response.status} {response.status >= 200 && response.status < 300 ? 'OK' : 'Error'}</span>}</div>
             {busy ? <div className="response-placeholder"><span className="spinner" />Waiting for the server…</div>
               : response ? (
                 <div className="response-result">
