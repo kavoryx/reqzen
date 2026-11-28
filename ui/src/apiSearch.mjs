@@ -176,10 +176,10 @@ function parameterPatterns(parameterName) {
     aliases.add(`${stem}Id`);
     aliases.add(`${stem}_id`);
     aliases.add(`${stem}-id`);
-  }
-  const stem = compact.replace(/id$/i, '').toLowerCase();
-  if (stem === 'org') {
-    ['org', 'orgId', 'org_id', 'organization', 'organizationId', 'organization_id'].forEach((alias) => aliases.add(alias));
+  } else {
+    aliases.add(`${raw}Id`);
+    aliases.add(`${raw}_id`);
+    aliases.add(`${raw}-id`);
   }
   return [...aliases].map(escapedParameterPattern).sort((left, right) => right.length - left.length);
 }

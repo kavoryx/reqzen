@@ -15,7 +15,7 @@ test('a custom request needs a name, a valid method and an address', () => {
 test('an API key needs a valid header name, and bad header names are dropped', () => {
   assert.ok(custom.validate({ name: 'x', method: 'GET', url: '/x', auth: 'apikey', authKey: 'bad name', authValue: 'v' })
     .problems[0].includes('Give the API key header a name'));
-  const r = custom.validate({ name: 'x', method: 'GET', url: '/x', headers: [{ key: 'X-Tenant', value: 'example-org' }, { key: 'bad key', value: '1' }] });
+  const r = custom.validate({ name: 'x', method: 'GET', url: '/x', headers: [{ key: 'X-Tenant', value: 'sample-tenant' }, { key: 'bad key', value: '1' }] });
   assert.deepEqual(r.value.headers.map((h) => h.key), ['X-Tenant']);
 });
 

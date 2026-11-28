@@ -28,7 +28,7 @@ test('matching tolerates word order, case, plurals and long ID values', async ()
   const { rankApiSearch } = await search;
   assert.equal(rankApiSearch('USERS list', candidates)[0].candidate.id, 'list');
   assert.equal(rankApiSearch('get user by id 6aed518cc9d52fa901b034ae', candidates)[0].candidate.id, 'one');
-  assert.equal(rankApiSearch('get users for orgId ce080c13-da92-4e54-b375-517875018920', candidates)[0].candidate.id, 'list');
+  assert.equal(rankApiSearch('get users for productId product-123', candidates)[0].candidate.id, 'list');
   assert.equal(rankApiSearch('identity users', candidates)[0].candidate.id, 'list');
 });
 
@@ -59,88 +59,88 @@ test('custom metadata is searchable even when it is the only matching text', asy
 test('search intent hard-filters method, entity and GET item shape', async () => {
   const { matchesApiSearchIntent, rankApiSearch } = await search;
   const rows = [
-    { id: 'pool-list', method: 'GET', path: '/v3/pools', summary: 'List pools' },
-    { id: 'pool-item', method: 'GET', path: '/v3/pools/{poolId}', summary: 'Get pool' },
-    { id: 'pool-put', method: 'PUT', path: '/v3/pools/{poolId}', summary: 'Update pool' },
-    { id: 'pool-patch', method: 'PATCH', path: '/v3/pools/{poolId}', summary: 'Patch pool' },
-    { id: 'pool-delete', method: 'DELETE', path: '/v3/pools/{poolId}', summary: 'Delete pool' },
+    { id: 'product-list', method: 'GET', path: '/v3/products', summary: 'List products' },
+    { id: 'product-item', method: 'GET', path: '/v3/products/{productId}', summary: 'Get product' },
+    { id: 'product-put', method: 'PUT', path: '/v3/products/{productId}', summary: 'Update product' },
+    { id: 'product-patch', method: 'PATCH', path: '/v3/products/{productId}', summary: 'Patch product' },
+    { id: 'product-delete', method: 'DELETE', path: '/v3/products/{productId}', summary: 'Delete product' },
     { id: 'order-list', method: 'GET', path: '/v3/orders', summary: 'List orders' },
   ];
-  assert.deepEqual(rankApiSearch('fetch all pools', rows).map(({ candidate }) => candidate.id), ['pool-list']);
-  assert.deepEqual(rankApiSearch('get pool by id abc', rows).map(({ candidate }) => candidate.id), ['pool-item']);
-  assert.deepEqual(rankApiSearch('update pool', rows).map(({ candidate }) => candidate.id), ['pool-put', 'pool-patch']);
-  assert.deepEqual(rankApiSearch('patch pool', rows).map(({ candidate }) => candidate.id), ['pool-patch']);
-  assert.deepEqual(rankApiSearch('delete pool', rows).map(({ candidate }) => candidate.id), ['pool-delete']);
-  assert.equal(matchesApiSearchIntent('delete pool', rows[1]), false);
+  assert.deepEqual(rankApiSearch('fetch all products', rows).map(({ candidate }) => candidate.id), ['product-list']);
+  assert.deepEqual(rankApiSearch('get product by id abc', rows).map(({ candidate }) => candidate.id), ['product-item']);
+  assert.deepEqual(rankApiSearch('update product', rows).map(({ candidate }) => candidate.id), ['product-put', 'product-patch']);
+  assert.deepEqual(rankApiSearch('patch product', rows).map(({ candidate }) => candidate.id), ['product-patch']);
+  assert.deepEqual(rankApiSearch('delete product', rows).map(({ candidate }) => candidate.id), ['product-delete']);
+  assert.equal(matchesApiSearchIntent('delete product', rows[1]), false);
 });
 
 test('configured entity groups treat related names consistently', async () => {
   const { rankApiSearch } = await search;
   const rows = [
-    { id: 'pool', method: 'GET', path: '/v1/pools', summary: 'List pools' },
-    { id: 'group', method: 'GET', path: '/v1/pool-groups', summary: 'List pool groups' },
+    { id: 'product', method: 'GET', path: '/v1/products', summary: 'List products' },
+    { id: 'group', method: 'GET', path: '/v1/product-groups', summary: 'List product groups' },
     { id: 'template', method: 'GET', path: '/v1/templates', summary: 'List templates' },
   ];
-  const entityGroups = ['pool, pools, pool group, pool groups, template, templates'];
-  assert.deepEqual(rankApiSearch('fetch all pool groups', rows, { entityGroups }).map(({ candidate }) => candidate.id).sort(), ['group', 'pool', 'template']);
-  assert.deepEqual(rankApiSearch('get all templates/pools', rows, { entityGroups }).map(({ candidate }) => candidate.id).sort(), ['group', 'pool', 'template']);
-  assert.deepEqual(rankApiSearch('fetch all pools', rows, { entityGroups: [] }).map(({ candidate }) => candidate.id), ['pool']);
+  const entityGroups = ['product, products, product group, product groups, template, templates'];
+  assert.deepEqual(rankApiSearch('fetch all product groups', rows, { entityGroups }).map(({ candidate }) => candidate.id).sort(), ['group', 'product', 'template']);
+  assert.deepEqual(rankApiSearch('get all templates/products', rows, { entityGroups }).map(({ candidate }) => candidate.id).sort(), ['group', 'product', 'template']);
+  assert.deepEqual(rankApiSearch('fetch all products', rows, { entityGroups: [] }).map(({ candidate }) => candidate.id), ['product']);
 });
 
 test('strict entity matching supports nested paths while preferring the final resource segment', async () => {
   const { rankApiSearch } = await search;
   const rows = [
-    { id: 'org-pools', method: 'GET', path: '/v3/organizations/{orgId}/pools', summary: 'List organization pools' },
-    { id: 'org-orders', method: 'GET', path: '/v3/organizations/{orgId}/orders', summary: 'List organization orders' },
+    { id: 'product-variants', method: 'GET', path: '/v3/products/{productId}/variants', summary: 'List product variants' },
+    { id: 'product-orders', method: 'GET', path: '/v3/products/{productId}/orders', summary: 'List product orders' },
   ];
-  assert.deepEqual(rankApiSearch('get pools for orgId ce080c13-da92-4e54-b375-517875018920', rows)
-    .map(({ candidate }) => candidate.id), ['org-pools']);
-  assert.deepEqual(rankApiSearch('get all pools by orgId 123243456', rows)
-    .map(({ candidate }) => candidate.id), ['org-pools']);
+  assert.deepEqual(rankApiSearch('get variants for productId product-123', rows)
+    .map(({ candidate }) => candidate.id), ['product-variants']);
+  assert.deepEqual(rankApiSearch('get all variants by productId 123243456', rows)
+    .map(({ candidate }) => candidate.id), ['product-variants']);
 });
 
 test('request documents populate parameter fields from natural language', async () => {
   const { requestValuesFromDocument, updateRequestValuesFromDocument } = await search;
   assert.deepEqual(
-    requestValuesFromDocument('get pools for orgId ce080c13-da92-4e54-b375-517875018920', ['orgId', 'poolId']),
-    { orgId: 'ce080c13-da92-4e54-b375-517875018920' },
+    requestValuesFromDocument('get products for productId product-123', ['productId', 'relatedProductId']),
+    { productId: 'product-123' },
   );
   assert.deepEqual(
-    requestValuesFromDocument('fetch pool with poolId="pool-42" and orgId: org-7', ['orgId', 'poolId']),
-    { orgId: 'org-7', poolId: 'pool-42' },
+    requestValuesFromDocument('fetch product with productId="product-42" and parentProductId: product-7', ['productId', 'parentProductId']),
+    { productId: 'product-42', parentProductId: 'product-7' },
   );
   assert.deepEqual(
-    requestValuesFromDocument('orgId=org-7&poolId=pool-42', ['orgId', 'poolId']),
-    { orgId: 'org-7', poolId: 'pool-42' },
+    requestValuesFromDocument('productId=product-7&relatedProductId=product-42', ['productId', 'relatedProductId']),
+    { productId: 'product-7', relatedProductId: 'product-42' },
   );
   assert.deepEqual(
-    requestValuesFromDocument('get all pools by org ce080c13-da92-4e54-b375-517875018920', ['orgId', 'poolId']),
-    { orgId: 'ce080c13-da92-4e54-b375-517875018920' },
+    requestValuesFromDocument('get all products by product product-123', ['productId', 'relatedProductId']),
+    { productId: 'product-123' },
   );
   assert.deepEqual(
-    requestValuesFromDocument('get all pools by org_id ce080c13-da92-4e54-b375-517875018920', ['orgId']),
-    { orgId: 'ce080c13-da92-4e54-b375-517875018920' },
+    requestValuesFromDocument('get all products by product_id product-123', ['productId']),
+    { productId: 'product-123' },
   );
   assert.deepEqual(
-    requestValuesFromDocument('get all pools by orgId=123243456', ['org']),
-    { org: '123243456' },
-  );
-  assert.deepEqual(
-    updateRequestValuesFromDocument(
-      { orgId: 'org-7', poolId: 'manually-entered' },
-      'get pools for orgId org-7',
-      'get pools',
-      ['orgId', 'poolId'],
-    ),
-    { poolId: 'manually-entered' },
+    requestValuesFromDocument('get all products by productId=123243456', ['product']),
+    { product: '123243456' },
   );
   assert.deepEqual(
     updateRequestValuesFromDocument(
-      { orgId: 'org-7' },
-      'get pools for orgId org-7',
-      'get pools for orgId org-8',
-      ['orgId'],
+      { productId: 'product-7', relatedProductId: 'manually-entered' },
+      'get products for productId product-7',
+      'get products',
+      ['productId', 'relatedProductId'],
     ),
-    { orgId: 'org-8' },
+    { relatedProductId: 'manually-entered' },
+  );
+  assert.deepEqual(
+    updateRequestValuesFromDocument(
+      { productId: 'product-7' },
+      'get products for productId product-7',
+      'get products for productId product-8',
+      ['productId'],
+    ),
+    { productId: 'product-8' },
   );
 });

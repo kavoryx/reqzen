@@ -4,11 +4,15 @@ Reqzen is a local-first, AI-assisted API explorer and REST API client for develo
 
 Built for developers onboarding to an existing service, investigating API contracts, or keeping repeatable API requests close to their project. Reqzen runs as a desktop app: no Reqzen account or hosted catalog is required, and core scanning, browsing, and API testing workflows work without AI.
 
+## Download Reqzen
+
+### [Download Reqzen for Windows or macOS](https://kavoryx.github.io/reqzen/)
+
 ## Install Reqzen
 
 You need only the installer for your operating system. The app and its runtime are included; **Node.js, npm, Git, Python, Java, and a separate frontend are not required to install or run Reqzen.**
 
-Use the [Reqzen project page](https://github.com/manasranjanmhnt/reqzen) to choose Windows or macOS and get the matching latest installer from the official GitHub Releases page. Mac users can select Apple silicon (ARM64) or Intel (x64).
+Use the [Reqzen download page](https://kavoryx.github.io/reqzen/) to choose Windows or macOS and get the matching latest installer from the official GitHub Releases page. Mac users can select Apple silicon (ARM64) or Intel (x64).
 
 You can also use the [GitHub Releases](https://github.com/manasranjanmhnt/reqzen/releases) page. New releases label the operating system and processor in each filename. Older releases use these suffixes: **Windows x64** ends in `-x64.exe`, **macOS Apple silicon (ARM64)** ends in `-arm64.dmg`, and **macOS Intel (x64)** ends in `-x64.dmg`. Install and launch the app using the instructions for your operating system below.
 
@@ -48,7 +52,7 @@ Reqzen includes scanning support for Spring Boot (Java), NestJS and Express-styl
 
 - **AI API search:** Ask a question in natural language. Local search ranks resource names, method, version, service, summary, description, and custom API fields, including common action words and collection versus individual routes. Optional AI agents can rerank candidates; regular search remains available when AI is off or unavailable.
 - **Request planning:** Describe the API call you want to make and get suggested values for declared path, query, and header parameters, plus a request body when applicable. Review and edit the request before sending it; planning does not send API calls.
-- **Offline-first request building:** Catalog search remains available without a model. The request document recognizes declared parameter aliases such as `org`, `orgId`, and `org_id`; use **Apply document** to populate a new draft with deterministic local parsing and optional model planning.
+- **Offline-first request building:** Catalog search remains available without a model. The request document recognizes declared parameter aliases such as `product`, `productId`, and `product_id`; use **Apply document** to populate a new draft with deterministic local parsing and optional model planning.
 - **API documentation:** Generate draft descriptions for operations and overviews for services from contract details. Generated text is marked by its source, and factual fallback text is available when a model cannot provide a usable draft.
 - **External documentation:** In **Settings → Documentation**, copy the source-to-snapshot prompt to use with a source-aware external tool, or export the current catalog and copy the enrichment prompt. Save the complete JSON output and use **Import snapshot**. The prompts use saved manual instructions and the same factual writing rules as in-app generation; review all generated output. Exports can include selected environments, token types, and variables; source code and catalog details may also be sensitive—review them and the external provider's policies before sharing.
 - **Readability:** In **Settings → Appearance**, increase or decrease text and interface size. Reset returns to 100% using the platform's system font. This setting is saved locally.

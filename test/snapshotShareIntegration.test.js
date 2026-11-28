@@ -16,12 +16,12 @@ test('snapshot sharing imports without overwriting and preserves custom edits ac
     environments: [{ environmentId: 'e1', name: 'Dev', baseUrl: 'https://dev.example', enabled: true }],
     operations: [{ operationId: 'op1', revisionId: 'rev1', serviceId: 's1', serviceName: 'Reports', httpMethod: 'GET', pathTemplate: '/reports' }],
     tokenTypes: [{ name: 'Client', mode: 'request', url: 'https://auth.example/token' }],
-    variables: [{ name: 'org', value: 'imported', byEnvironment: { e1: 'dev-value' } }, { name: 'team', value: '', byEnvironment: { e1: 'dev-team' } }],
+    variables: [{ name: 'product', value: 'imported', byEnvironment: { e1: 'dev-value' } }, { name: 'team', value: '', byEnvironment: { e1: 'dev-team' } }],
   };
   fs.writeFileSync(source, JSON.stringify(snapshot));
   const userData = path.join(dir, 'API Explorer');
   fs.mkdirSync(userData);
-  fs.writeFileSync(path.join(userData, 'variables.json'), JSON.stringify([{ id: 'existing', name: 'org', value: 'original', byEnvironment: {} }]));
+  fs.writeFileSync(path.join(userData, 'variables.json'), JSON.stringify([{ id: 'existing', name: 'product', value: 'original', byEnvironment: {} }]));
   fs.writeFileSync(path.join(userData, 'token-sources.json'), JSON.stringify({ version: 3, types: [{ id: 'existing', name: 'Client', mode: 'request', url: 'https://auth.example/original' }] }));
 
   let importFile = source;

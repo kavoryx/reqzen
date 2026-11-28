@@ -8,7 +8,7 @@ const op = {
   hasBody: false,
   parameters: [
     { name: 'itemId', in: 'path', required: true },
-    { name: 'org_id', in: 'query' },
+    { name: 'product_id', in: 'query' },
     { name: 'page', in: 'query' },
     { name: 'X-Tenant', in: 'header' },
     { name: 'Authorization', in: 'header' },
@@ -35,15 +35,15 @@ test('parseRank keeps only offered ids, in order, without duplicates', () => {
 test('parsePlan fills only declared parameters, reports the rest, and drops forbidden headers', () => {
   const text = JSON.stringify({
     path: { item_id: 'p-1' },
-    query: { orgId: 'o-9', unknownThing: 'x' },
-    headers: { 'x-tenant': 'example-org', Authorization: 'Bearer leaked' },
+    query: { productId: 'p-9', unknownThing: 'x' },
+    headers: { 'x-tenant': 'sample-tenant', Authorization: 'Bearer leaked' },
     body: null,
     notes: 'filled from text',
   });
-  const r = parsePlan(text, op, 'item p-1 for orgId o-9 with x-tenant example-org');
+  const r = parsePlan(text, op, 'item p-1 for productId p-9 with x-tenant sample-tenant');
   assert.deepEqual(r.values.path, { itemId: 'p-1' });
-  assert.deepEqual(r.values.query, { org_id: 'o-9' });
-  assert.deepEqual(r.values.headers, { 'X-Tenant': 'example-org' });
+  assert.deepEqual(r.values.query, { product_id: 'p-9' });
+  assert.deepEqual(r.values.headers, { 'X-Tenant': 'sample-tenant' });
   assert.deepEqual(r.ignored.sort(), ['Authorization', 'unknownThing']);
   assert.equal(r.notes, 'filled from text');
 });
@@ -57,18 +57,18 @@ test('parsePlan turns numbers into strings and only keeps a body when the operat
 });
 
 const ITEM_ID = '6aed518cc9d52fa901b034ae';
-const ORG_ID = 'ce080c13-da92-4e54-b375-517875018920';
-const sentence = `get item with id ${ITEM_ID} for org ${ORG_ID}`;
+const PRODUCT_ID = '1234567890abcdef';
+const sentence = `get item with id ${ITEM_ID} for product ${PRODUCT_ID}`;
 
 test('IDs in the sentence go to the parameter named before them', () => {
   const known = extractKnown(sentence, op);
   assert.deepEqual(known.path, { itemId: ITEM_ID });
-  assert.deepEqual(known.query, { org_id: ORG_ID });
+  assert.deepEqual(known.query, { product_id: PRODUCT_ID });
 });
 
-test('"org or orgId or org_id" phrasing still reaches org_id', () => {
-  const known = extractKnown(`item ${ITEM_ID} for org or orgId or org_id ${ORG_ID}`, op);
-  assert.deepEqual(known.query, { org_id: ORG_ID });
+test('"product or productId or product_id" phrasing still reaches product_id', () => {
+  const known = extractKnown(`item ${ITEM_ID} for product or productId or product_id ${PRODUCT_ID}`, op);
+  assert.deepEqual(known.query, { product_id: PRODUCT_ID });
 });
 
 test('an ambiguous ID is left alone for the model', () => {
@@ -84,22 +84,22 @@ test('an ID the model invents is dropped, and the ID from the sentence is used i
 });
 
 test('an ID the model adds for a parameter the sentence does not mention is dropped', () => {
-  const r = parsePlan(JSON.stringify({ query: { page: '1', org_id: 'ffffffffffffffffffffffff' } }), op, 'get item page 1');
-  assert.equal(r.values.query.org_id, undefined);
+  const r = parsePlan(JSON.stringify({ query: { page: '1', product_id: 'product-made-up' } }), op, 'get item page 1');
+  assert.equal(r.values.query.product_id, undefined);
   assert.equal(r.values.query.page, '1');
 });
 
 test('a value the sentence does not contain is dropped, even when it is not an ID', () => {
-  const r = parsePlan(JSON.stringify({ query: { page: '1', sort: 'name' } }), op, 'get item for the org');
+  const r = parsePlan(JSON.stringify({ query: { page: '1', sort: 'name' } }), op, 'get item for the product');
   assert.equal(r.values.query.page, undefined);
   assert.equal(r.values.query.sort, undefined);
   assert.ok(r.ignored.includes('page (value not in the description)'));
 });
 
 test('top-level body text the sentence does not contain is blanked so a variable can fill it', () => {
-  const body = { orgId: 'org-made-up', name: 'Item A' };
+  const body = { productId: 'product-made-up', name: 'Item A' };
   const r = parsePlan(JSON.stringify({ body }), { ...op, hasBody: true }, 'create a item named Item A');
-  assert.deepEqual(JSON.parse(r.values.body), { orgId: '', name: 'Item A' });
+  assert.deepEqual(JSON.parse(r.values.body), { productId: '', name: 'Item A' });
 });
 
 test('the prompt tells the model which values were already read', () => {

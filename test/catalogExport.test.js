@@ -102,14 +102,14 @@ test('sharing filters services, environments, token types and environment-specif
   };
   const environments = [{ ...snapshot.environments[0], overridden: true, snapshotBaseUrl: 'https://original-private.example' }, snapshot.environments[1]];
   const types = [{ id: 't1', name: 'Client', mode: 'request', url: 'https://user:pass@auth.example/token?secret=hidden#fragment', method: 'POST', auth: 'basic', basic: 'secret-basic', headers: 'X-Key: header-secret', body: 'body-secret' }];
-  const savedVariables = [{ id: 'v1', name: 'org', value: 'shared', byEnvironment: { e1: 'dev-value', e2: 'production-secret' } }];
+  const savedVariables = [{ id: 'v1', name: 'product', value: 'shared', byEnvironment: { e1: 'dev-value', e2: 'production-secret' } }];
   const selections = { services: ['s1'], environments: ['e1'], tokenTypes: ['t1'], variables: ['v1'], defaultEnvironmentId: 'e2', includeVariableValues: true };
   const result = ex.buildShareCatalog({ snapshot: sub, environments, types, savedVariables, selections });
   assert.deepEqual(result.operations.map((op) => op.operationId), ['o1', 'o2']);
   assert.deepEqual(result.environments.map((env) => env.environmentId), ['e1']);
   assert.equal(result.defaultEnvironmentId, 'e1');
   assert.deepEqual(result.serviceOverrides, [sub.serviceOverrides[0]]);
-  assert.deepEqual(result.variables, [{ name: 'org', value: 'shared', byEnvironment: { e1: 'dev-value' } }]);
+  assert.deepEqual(result.variables, [{ name: 'product', value: 'shared', byEnvironment: { e1: 'dev-value' } }]);
   assert.equal(result.tokenTypes[0].url, 'https://auth.example/token');
   assert.equal(result.tokenTypes[0].headers, '');
   assert.equal(result.tokenTypes[0].body, '');
@@ -126,7 +126,7 @@ test('sharing filters services, environments, token types and environment-specif
 });
 
 test('sharing refuses stale selections and unconfirmed or unavailable variable values', () => {
-  const args = { snapshot, environments: snapshot.environments, types: [], savedVariables: [{ id: 'v', name: 'org', value: '', byEnvironment: { e2: 'secret' } }], selections: { services: ['s1'], environments: ['e1'], tokenTypes: [], variables: ['v'] } };
+  const args = { snapshot, environments: snapshot.environments, types: [], savedVariables: [{ id: 'v', name: 'product', value: '', byEnvironment: { e2: 'secret' } }], selections: { services: ['s1'], environments: ['e1'], tokenTypes: [], variables: ['v'] } };
   assert.throws(() => ex.buildShareCatalog(args), /Confirm/);
   assert.throws(() => ex.buildShareCatalog({ ...args, selections: { ...args.selections, includeVariableValues: true } }), /no shared value/);
   assert.throws(() => ex.buildShareCatalog({ ...args, selections: { ...args.selections, services: ['missing'], variables: [] } }), /no longer available/);

@@ -16,12 +16,12 @@ public class ItemController {
     private final ItemService service = new ItemService();
 
     /**
-     * Lists items for one org.
+     * Lists items for one product.
      */
     @GetMapping
-    public List<ItemDto> list(@RequestParam(value = "orgId", required = true) String orgId,
+    public List<ItemDto> list(@RequestParam(value = "productId", required = true) String productId,
                               @RequestParam(required = false) Integer page) {
-        return service.list(orgId, page);
+        return service.list(productId, page);
     }
 
     @GetMapping("/{itemId}")
@@ -75,8 +75,8 @@ test('mappings become operations with the class path, method path and parameters
     'PUT /sample/v1/items/sync',
   ]);
   const list = r.operations.find((o) => o.httpMethod === 'GET' && o.pathTemplate === '/sample/v1/items');
-  assert.deepEqual(list.definition.operation.parameters.map((p) => [p.name, p.in, p.required]), [['orgId', 'query', true], ['page', 'query', false]]);
-  assert.equal(list.summary, 'Lists items for one org.');
+  assert.deepEqual(list.definition.operation.parameters.map((p) => [p.name, p.in, p.required]), [['productId', 'query', true], ['page', 'query', false]]);
+  assert.equal(list.summary, 'Lists items for one product.');
   const get = r.operations.find((o) => o.httpMethod === 'GET' && o.pathTemplate === '/sample/v1/items/{itemId}');
   assert.deepEqual(get.definition.operation.parameters.map((p) => [p.name, p.in]), [['itemId', 'path']]);
   assert.equal(get.definition['x-apiexplorer'].controller, 'ItemController');

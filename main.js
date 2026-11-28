@@ -61,7 +61,7 @@ const reconcileSavedLibrary = (operations) => {
   return library.save(libraryFile, library.reconcileStore(savedLibrary(), operations || []));
 };
 const savedPayloads = () => (payloadsFile ? payloads.load(payloadsFile) : {});
-// Shared variables such as orgId, kept on this computer.
+// Shared variables such as productId, kept on this computer.
 const savedVariables = () => {
   const saved = variablesFile ? variables.load(variablesFile) : [];
   aiRedaction.registerSensitiveValues(saved);
