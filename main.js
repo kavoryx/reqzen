@@ -145,7 +145,14 @@ function activateWorkspaceSnapshot(id) {
   if (!item) return null;
   let parsed = withKnownEnvironments(safeParse(item.text));
   if (!parsed) return null;
-  if (item.customMetadata) parsed = customFields.applyMetadata(parsed, item.customMetadata.definitions, item.customMetadata.values);
+  if (item.customMetadata) {
+    parsed = customFields.applyMetadata(
+      parsed,
+      item.customMetadata.definitions,
+      item.customMetadata.values,
+      item.customMetadata.apiFieldDefinitions,
+    );
+  }
   openSnapshot = parsed;
   activeSnapshotId = item.id;
   rememberEnvironments(parsed);
@@ -448,7 +455,12 @@ ipcMain.handle('snapshot:open', async (event, options) => {
   const workspaceItem = rememberWorkspaceSnapshot(name, text);
   if (workspaceItem) activeSnapshotId = workspaceItem.id;
   if (workspaceItem && workspaceItem.customMetadata) {
-    openSnapshot = customFields.applyMetadata(openSnapshot, workspaceItem.customMetadata.definitions, workspaceItem.customMetadata.values);
+    openSnapshot = customFields.applyMetadata(
+      openSnapshot,
+      workspaceItem.customMetadata.definitions,
+      workspaceItem.customMetadata.values,
+      workspaceItem.customMetadata.apiFieldDefinitions,
+    );
   }
   reconcileSavedLibrary(workspaceOperations());
   const activeText = JSON.stringify(openSnapshot);
@@ -460,11 +472,17 @@ ipcMain.handle('snapshot:open', async (event, options) => {
 ipcMain.handle('snapshot:saveCustomFields', (_event, input) => {
   if (!openSnapshot || !activeSnapshotId || !workspaceSnapshotsFile) return { ok: false, problem: 'Open a saved snapshot first.' };
   try {
-    const updated = customFields.applyMetadata(openSnapshot, input && input.definitions, input && input.values);
+    const updated = customFields.applyMetadata(
+      openSnapshot, input && input.definitions, input && input.values, input && input.apiFieldDefinitions,
+    );
     const items = readWorkspaceSnapshots();
     const item = items.find((entry) => entry.id === activeSnapshotId);
     if (!item) return { ok: false, problem: 'The active snapshot is no longer available.' };
-    item.customMetadata = { definitions: updated.customFieldDefinitions, values: Object.fromEntries(updated.operations.map((operation) => [operation.operationId, operation.customFields])) };
+    item.customMetadata = {
+      definitions: updated.customFieldDefinitions,
+      values: Object.fromEntries(updated.operations.map((operation) => [operation.operationId, operation.customFields])),
+      apiFieldDefinitions: updated.apiFieldDefinitions,
+    };
     saveWorkspaceSnapshots(items);
     openSnapshot = updated;
     saveLastSnapshot(item.name, JSON.stringify(updated));

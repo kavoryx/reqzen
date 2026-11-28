@@ -51,6 +51,13 @@ interface CustomFieldDefinition {
   visible: boolean;
 }
 
+interface ApiFieldDefinition {
+  kind: 'operation' | 'custom';
+  key: string;
+  label: string;
+  visible: boolean;
+}
+
 interface Service {
   serviceId: string;
   name: string;
@@ -74,6 +81,7 @@ interface Snapshot {
   environments: Environment[];
   serviceOverrides?: Array<Record<string, unknown>>;
   customFieldDefinitions: CustomFieldDefinition[];
+  apiFieldDefinitions: ApiFieldDefinition[];
 }
 
 interface Variable {
@@ -351,7 +359,82 @@ function parseSnapshot(text: string): Snapshot {
     environments: arrayOf<Environment>(data.environments),
     serviceOverrides: arrayOf<Record<string, unknown>>(data.serviceOverrides),
     customFieldDefinitions: arrayOf<CustomFieldDefinition>(data.customFieldDefinitions),
+    apiFieldDefinitions: arrayOf<ApiFieldDefinition>(data.apiFieldDefinitions),
   };
+}
+
+const defaultApiFields: ApiFieldDefinition[] = [
+  { kind: 'operation', key: 'httpMethod', label: 'Method', visible: true },
+  { kind: 'operation', key: 'pathTemplate', label: 'Path', visible: true },
+  { kind: 'operation', key: 'serviceName', label: 'Service', visible: true },
+  { kind: 'operation', key: 'summary', label: 'Summary', visible: true },
+  { kind: 'operation', key: 'contractVersion', label: 'Version', visible: true },
+];
+
+function fieldLabel(key: string): string {
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function apiFieldsFor(snapshot: Snapshot): ApiFieldDefinition[] {
+  const saved = new Map<string, ApiFieldDefinition>((snapshot.apiFieldDefinitions || []).map((field) =>
+    [`${field.kind}:${field.key}`, field] as const));
+  const available = new Map<string, ApiFieldDefinition>();
+  for (const field of defaultApiFields) available.set(`${field.kind}:${field.key}`, saved.get(`${field.kind}:${field.key}`) || field);
+  for (const operation of snapshot.operations) {
+    for (const key of Object.keys(operation)) {
+      if (key === 'customFields') continue;
+      const id = `operation:${key}`;
+      if (!available.has(id)) {
+        available.set(id, saved.get(id) || { kind: 'operation', key, label: fieldLabel(key), visible: true });
+      }
+    }
+  }
+  for (const custom of snapshot.customFieldDefinitions) {
+    const id = `custom:${custom.key}`;
+    available.set(id, saved.get(id) || { kind: 'custom', key: custom.key, label: custom.label, visible: custom.visible });
+  }
+  const ordered: ApiFieldDefinition[] = [];
+  for (const field of snapshot.apiFieldDefinitions || []) {
+    const id = `${field.kind}:${field.key}`;
+    const current = available.get(id);
+    if (current) {
+      ordered.push(current);
+      available.delete(id);
+    }
+  }
+  return [...ordered, ...available.values()];
+}
+
+function fieldId(field: ApiFieldDefinition): string {
+  return `${field.kind}:${field.key}`;
+}
+
+function moveApiField(fields: ApiFieldDefinition[], sourceId: string, targetId: string): ApiFieldDefinition[] {
+  const source = fields.findIndex((field) => fieldId(field) === sourceId);
+  const target = fields.findIndex((field) => fieldId(field) === targetId);
+  if (source < 0 || target < 0 || source === target) return fields;
+  const next = [...fields];
+  const [field] = next.splice(source, 1);
+  next.splice(target, 0, field);
+  return next;
+}
+
+function apiFieldValue(operation: Operation, field: ApiFieldDefinition): string {
+  if (field.kind === 'custom') return operation.customFields?.[field.key] || '—';
+  const value = (operation as unknown as Record<string, unknown>)[field.key];
+  if (field.key === 'contractVersion') return versionFor(operation);
+  if (value === undefined || value === null || value === '') return '—';
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return '[unavailable]';
+    }
+  }
+  return String(value);
 }
 
 function resultError(value: unknown): string | null {
@@ -733,8 +816,8 @@ function ShareSnapshotDialog({ services, environments, tokenTypes, variables, de
 }
 
 function CustomFieldDialog({ initial, onSave, onClose }: {
-  initial: CustomFieldDefinition[];
-  onSave: (definitions: CustomFieldDefinition[]) => Promise<boolean>;
+  initial: ApiFieldDefinition[];
+  onSave: (definitions: CustomFieldDefinition[], fields: ApiFieldDefinition[]) => Promise<boolean>;
   onClose: () => void;
 }) {
   const [fields, setFields] = useState(initial);
@@ -742,6 +825,7 @@ function CustomFieldDialog({ initial, onSave, onClose }: {
   const [label, setLabel] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [draggedField, setDraggedField] = useState('');
   const add = () => {
     const name = key.trim();
     const title = label.trim();
@@ -753,30 +837,60 @@ function CustomFieldDialog({ initial, onSave, onClose }: {
       setError('That field key already exists.');
       return;
     }
-    setFields([...fields, { key: name, label: title, visible: true }]);
+    setFields([...fields, { kind: 'custom', key: name, label: title, visible: true }]);
     setKey('');
     setLabel('');
     setError('');
   };
   return (
-    <Dialog title="Configure API fields" detail="Add fields to the snapshot and choose which appear as catalog columns." onClose={onClose} className="wide-dialog">
+    <Dialog title="Configure API fields" detail="Rename, show, hide, or drag every catalog field to arrange the column order." onClose={onClose} className="wide-dialog">
       <div className="custom-fields-list">{fields.map((field, index) => (
-        <div className="custom-field-row" key={field.key}>
-          <div><label>Label <input aria-label={`Label for ${field.key}`} maxLength={60} value={field.label} onChange={(event) => setFields(fields.map((entry, i) => i === index ? { ...entry, label: event.target.value } : entry))} /></label><small>{field.key}</small></div>
+        <div
+          className={`custom-field-row ${draggedField === fieldId(field) ? 'dragging' : ''}`}
+          key={fieldId(field)}
+          draggable
+          onDragStart={(event) => {
+            const id = fieldId(field);
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/plain', id);
+            setDraggedField(id);
+          }}
+          onDragEnd={() => setDraggedField('')}
+          onDragOver={(event) => {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'move';
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            const source = event.dataTransfer.getData('text/plain') || draggedField;
+            setFields((current) => moveApiField(current, source, fieldId(field)));
+            setDraggedField('');
+          }}
+        >
+          <span className="field-drag-handle" aria-hidden="true" title="Drag to reorder">↕</span>
+          <div><label>Label <input aria-label={`Label for ${field.key}`} maxLength={60} value={field.label} onChange={(event) => setFields(fields.map((entry, i) => i === index ? { ...entry, label: event.target.value } : entry))} /></label><small>{field.kind === 'custom' ? 'Custom' : 'Snapshot property'} · {field.key}</small></div>
           <label><input type="checkbox" checked={field.visible} onChange={(event) => setFields(fields.map((entry, i) => i === index ? { ...entry, visible: event.target.checked } : entry))} /> Show column</label>
-          <Button type="button" onClick={() => setFields(fields.filter((entry) => entry.key !== field.key))}>Remove</Button>
+          <div className="field-order-actions">
+            <button type="button" aria-label={`Move ${field.label} earlier`} title="Move earlier" disabled={index === 0} onClick={() => setFields(moveApiField(fields, fieldId(field), fieldId(fields[index - 1])))}>←</button>
+            <button type="button" aria-label={`Move ${field.label} later`} title="Move later" disabled={index === fields.length - 1} onClick={() => setFields(moveApiField(fields, fieldId(field), fieldId(fields[index + 1])))}>→</button>
+          </div>
+          {field.kind === 'custom' && <Button type="button" onClick={() => setFields(fields.filter((entry) => !(entry.kind === field.kind && entry.key === field.key)))}>Remove</Button>}
         </div>
       ))}</div>
-      <p className="privacy-note">Removing a field and saving also removes its values from every API. Custom fields are included in exported snapshots.</p>
+      <p className="privacy-note">Snapshot properties can be hidden but not deleted. Removing a custom field also removes its values from every API. The configuration is included in exported snapshots.</p>
       <div className="form-grid">
         <Field label="Field key"><input value={key} onChange={(event) => setKey(event.target.value)} placeholder="owner" /></Field>
         <Field label="Field label"><input value={label} onChange={(event) => setLabel(event.target.value)} placeholder="Team owner" /></Field>
       </div>
       {error && <p className="field-error" role="alert">{error}</p>}
-      <Button type="button" disabled={fields.length >= 12} onClick={add}>Add field</Button>
+      <Button type="button" disabled={fields.filter((field) => field.kind === 'custom').length >= 12} onClick={add}>Add custom field</Button>
       <div className="dialog-actions"><Button type="button" onClick={onClose} disabled={busy}>Cancel</Button><Button type="button" variant="primary" disabled={busy} onClick={() => {
         setBusy(true);
-        void onSave(fields).then((ok) => { if (ok) onClose(); }).finally(() => setBusy(false));
+        const definitions = fields.filter((field) => field.kind === 'custom').map((field) => ({
+          key: field.key, label: field.label, visible: field.visible,
+        }));
+        const normalizedFields = fields.map((field) => ({ ...field, label: field.label.trim() }));
+        void onSave(definitions, normalizedFields).then((ok) => { if (ok) onClose(); }).finally(() => setBusy(false));
       }}>Save fields</Button></div>
     </Dialog>
   );
@@ -2142,7 +2256,11 @@ function App() {
     }
   };
 
-  const saveCustomFields = async (definitions: CustomFieldDefinition[], changed?: { id: string; values: Record<string, string> }): Promise<boolean> => {
+  const saveCustomFields = async (
+    definitions: CustomFieldDefinition[],
+    apiFieldDefinitions: ApiFieldDefinition[] = snapshot ? apiFieldsFor(snapshot) : [],
+    changed?: { id: string; values: Record<string, string> },
+  ): Promise<boolean> => {
     if (!snapshot) return false;
     const keys = new Set(definitions.map((field) => field.key));
     const values = Object.fromEntries(snapshot.operations.map((operation) => {
@@ -2150,17 +2268,17 @@ function App() {
       return [operation.operationId, Object.fromEntries(Object.entries(current).filter(([key]) => keys.has(key)))];
     }));
     try {
-      const result = record(await desktop.saveSnapshotCustomFields({ definitions, values }));
+      const result = record(await desktop.saveSnapshotCustomFields({ definitions, values, apiFieldDefinitions }));
       const problem = resultError(result);
       if (problem) throw new Error(problem);
       if (result.ok !== true || typeof result.text !== 'string') throw new Error('The snapshot could not be updated.');
       const updated = parseSnapshot(result.text);
       setSnapshot(updated);
       setSelectedOperation((current) => current ? updated.operations.find((operation) => operation.operationId === current.operationId) || current : null);
-      notify('Custom API fields saved.', 'success');
+      notify('API field configuration saved.', 'success');
       return true;
     } catch (error) {
-      notify(`Could not save custom fields: ${errorMessage(error)}`, 'error');
+      notify(`Could not save API fields: ${errorMessage(error)}`, 'error');
       return false;
     }
   };
@@ -2482,7 +2600,15 @@ function App() {
               onSelectService={setSelectedService}
               onOpenOperation={openOperation}
               onNewRequest={() => setCustomRequestEditor(true)}
-              customFields={snapshot.customFieldDefinitions}
+              apiFields={apiFieldsFor(snapshot)}
+              onReorderFields={(fields) => {
+                const definitions = fields.filter((field) => field.kind === 'custom').map((field) => ({
+                  key: field.key,
+                  label: field.label,
+                  visible: field.visible,
+                }));
+                return saveCustomFields(definitions, fields);
+              }}
               onConfigureFields={() => setCustomFieldEditorOpen(true)}
               onExportSnapshot={() => setShareSnapshotOpen(true)}
               snapshotName={snapshotName}
@@ -2677,13 +2803,23 @@ function App() {
           documentationBusy={docJob.state === 'running'}
           onDocument={() => { void generateDocumentation([selectedOperation]); }}
           customFields={snapshot?.customFieldDefinitions || []}
-          onSaveCustomFields={(values) => saveCustomFields(snapshot?.customFieldDefinitions || [], { id: selectedOperation.operationId, values })}
+          onSaveCustomFields={(values) => saveCustomFields(
+            snapshot?.customFieldDefinitions || [],
+            snapshot ? apiFieldsFor(snapshot) : [],
+            { id: selectedOperation.operationId, values },
+          )}
           onClose={() => setSelectedOperation(null)}
         />
       )}
 
       {shareSnapshotOpen && snapshot && <ShareSnapshotDialog services={snapshot.services} environments={environments} tokenTypes={tokenTypes} variables={variables} defaultEnvironmentId={activeEnvironmentId} onExport={exportSnapshot} onClose={() => setShareSnapshotOpen(false)} />}
-      {customFieldEditorOpen && snapshot && <CustomFieldDialog initial={snapshot.customFieldDefinitions} onSave={(definitions) => saveCustomFields(definitions)} onClose={() => setCustomFieldEditorOpen(false)} />}
+      {customFieldEditorOpen && snapshot && (
+        <CustomFieldDialog
+          initial={apiFieldsFor(snapshot)}
+          onSave={(definitions, fields) => saveCustomFields(definitions, fields)}
+          onClose={() => setCustomFieldEditorOpen(false)}
+        />
+      )}
 
       {environmentEditor && (
         <Dialog
@@ -3072,7 +3208,8 @@ function ProjectRow({ project }: { project: Project }) {
 function Catalog({
   operations,
   services,
-  customFields,
+  apiFields,
+  onReorderFields,
   onConfigureFields,
   onExportSnapshot,
   selectedService,
@@ -3092,7 +3229,8 @@ function Catalog({
 }: {
   operations: Operation[];
   services: Service[];
-  customFields: CustomFieldDefinition[];
+  apiFields: ApiFieldDefinition[];
+  onReorderFields: (fields: ApiFieldDefinition[]) => Promise<boolean>;
   onConfigureFields: () => void;
   onExportSnapshot: () => void;
   selectedService: string;
@@ -3115,6 +3253,7 @@ function Catalog({
   const [serviceWidth, setServiceWidth] = useState(220);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [draggedColumn, setDraggedColumn] = useState('');
   const catalogActionsRef = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
     const dismiss = (event: MouseEvent) => {
@@ -3124,7 +3263,7 @@ function Catalog({
     return () => document.removeEventListener('mousedown', dismiss);
   }, []);
   const aiSet = useMemo(() => new Set(aiIds), [aiIds]);
-  const visibleFields = customFields.filter((field) => field.visible);
+  const visibleFields = apiFields.filter((field) => field.visible);
   const requestBuilderQuery = search.trim().split(/\s+/).length >= 3
     && /\b(create|add|update|edit|delete|remove|get|fetch|find|retrieve|list|show|send|upload|download)\b/i.test(search);
   const pageCount = Math.max(1, Math.ceil(operations.length / pageSize));
@@ -3132,10 +3271,16 @@ function Catalog({
   const pageOperations = operations.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const pageStart = operations.length ? (currentPage - 1) * pageSize + 1 : 0;
   const pageEnd = Math.min(currentPage * pageSize, operations.length);
-  const columnCount = 5 + visibleFields.length;
+  const columnCount = visibleFields.length;
+  const defaultColumnWidth = (field: ApiFieldDefinition) => {
+    if (field.key === 'httpMethod') return 62;
+    if (field.key === 'pathTemplate') return 260;
+    if (field.key === 'summary' || field.key === 'description') return 320;
+    if (field.key === 'contractVersion') return 80;
+    return 140;
+  };
   const [catalogColumnWidths, setCatalogColumnWidths] = useState<number[]>(() => [
-    ...(columnWidths || [62, 260, 140, 320, 80]),
-    ...visibleFields.map(() => 140),
+    ...visibleFields.map((field, index) => columnWidths?.[index] ?? defaultColumnWidth(field)),
   ]);
   useEffect(() => setPage(1), [search, selectedService]);
   useEffect(() => {
@@ -3143,8 +3288,8 @@ function Catalog({
   }, [page, pageCount]);
   useEffect(() => {
     setCatalogColumnWidths((current) => Array.from({ length: columnCount }, (_, index) =>
-      current[index] ?? (index < 5 ? [62, 260, 140, 320, 80][index] : 140)));
-  }, [columnCount]);
+      current[index] ?? defaultColumnWidth(visibleFields[index])));
+  }, [columnCount, apiFields]);
   const visiblePageNumbers = Array.from({ length: pageCount }, (_, index) => index + 1)
     .filter((number) => number === 1 || number === pageCount || Math.abs(number - currentPage) <= 1);
   const columnsStyle: CSSProperties = {
@@ -3157,13 +3302,13 @@ function Catalog({
     const startWidth = catalogColumnWidths[index];
     const move = (moveEvent: PointerEvent) => {
       setCatalogColumnWidths((current) => current.map((width, currentIndex) =>
-        currentIndex === index ? Math.max(index === 0 || index === 4 ? 60 : 100, Math.min(1200, startWidth + moveEvent.clientX - startX)) : width));
+        currentIndex === index ? Math.max(60, Math.min(1200, startWidth + moveEvent.clientX - startX)) : width));
     };
     const stop = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', stop);
       setCatalogColumnWidths((current) => {
-        onColumnWidths(current.slice(0, 5));
+        onColumnWidths(current);
         return current;
       });
     };
@@ -3172,9 +3317,9 @@ function Catalog({
   };
   const resizeColumnWithKeyboard = (index: number, direction: number) => {
     const next = catalogColumnWidths.map((width, currentIndex) =>
-      currentIndex === index ? Math.max(index === 0 || index === 4 ? 60 : 100, Math.min(1200, width + direction * 10)) : width);
+      currentIndex === index ? Math.max(60, Math.min(1200, width + direction * 10)) : width);
     setCatalogColumnWidths(next);
-    onColumnWidths(next.slice(0, 5));
+    onColumnWidths(next);
   };
   const startServiceResize = (event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -3257,15 +3402,51 @@ function Catalog({
             </div>
           </div>
           {operations.length ? (
-            <div className={`operation-table ${visibleFields.length ? 'custom-columns' : ''}`}>
+            <div className="operation-table custom-columns">
               <div className="operation-table-head" style={columnsStyle}>
-                {['Method', 'Path', 'Service', 'Summary', 'Version', ...visibleFields.map((field) => field.label)].map((label, index) => (
-                  <span className="catalog-column-heading" key={`${label}-${index}`}>
-                    <span>{label}</span>
+                {visibleFields.map((field, index) => (
+                  <span
+                    className={`catalog-column-heading ${draggedColumn === fieldId(field) ? 'dragging' : ''}`}
+                    key={fieldId(field)}
+                    draggable
+                    title={`Drag ${field.label} left or right to reorder`}
+                    onDragStart={(event) => {
+                      event.dataTransfer.effectAllowed = 'move';
+                      event.dataTransfer.setData('text/plain', fieldId(field));
+                      setDraggedColumn(fieldId(field));
+                    }}
+                    onDragEnd={() => setDraggedColumn('')}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = 'move';
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      const sourceId = event.dataTransfer.getData('text/plain') || draggedColumn;
+                      const targetId = fieldId(field);
+                      if (sourceId === targetId) return;
+                      const sourceVisibleIndex = visibleFields.findIndex((entry) => fieldId(entry) === sourceId);
+                      const targetVisibleIndex = visibleFields.findIndex((entry) => fieldId(entry) === targetId);
+                      void onReorderFields(moveApiField(apiFields, sourceId, targetId)).then((ok) => {
+                        if (!ok) return;
+                        setCatalogColumnWidths((current) => {
+                          const next = [...current];
+                          if (sourceVisibleIndex >= 0 && targetVisibleIndex >= 0) {
+                            const [width] = next.splice(sourceVisibleIndex, 1);
+                            next.splice(targetVisibleIndex, 0, width);
+                          }
+                          onColumnWidths(next);
+                          return next;
+                        });
+                      });
+                      setDraggedColumn('');
+                    }}
+                  >
+                    <span>{field.label}</span>
                     <span
                       className="column-resizer"
                       role="separator"
-                      aria-label={`Resize ${label} column`}
+                      aria-label={`Resize ${field.label} column`}
                       aria-orientation="vertical"
                       tabIndex={0}
                       onPointerDown={(event) => resizeColumn(index, event)}
@@ -3282,22 +3463,31 @@ function Catalog({
               <div className="operation-rows">
               {pageOperations.map((operation) => (
                 <button className={`operation-row ${aiSet.has(operation.operationId) ? 'ai-suggested' : ''}`} key={operation.operationId} type="button" style={columnsStyle} onClick={() => onOpenOperation(operation)}>
-                  <MethodBadge method={operation.httpMethod} />
-                  <span className="operation-path">
-                    <code>{operation.pathTemplate}</code>
-                    <span className="operation-path-badges">
-                      <OperationStatusBadges operation={operation} />
-                      {aiSet.has(operation.operationId) && <span className="ai-badge">AI suggested</span>}
-                    </span>
-                  </span>
-                  <span className="operation-service">{operation.serviceName}</span>
-                  <span className="operation-summary">
-                    <strong>{operation.summary || '—'}</strong>
-                    <small>{operation.description || 'No API description available.'}</small>
-                    {operation.documentationSource && <em>{operation.documentationSource === 'spec' ? 'Source documentation' : operation.documentationSource === 'template' ? 'Factual fallback' : 'AI-generated'}</em>}
-                  </span>
-                  <span className="operation-version">{versionFor(operation)}</span>
-                  {visibleFields.map((field) => <span className="operation-custom-field" key={field.key} title={`${field.label}: ${operation.customFields?.[field.key] || 'Not set'}`}>{operation.customFields?.[field.key] || '—'}</span>)}
+                  {visibleFields.map((field) => {
+                    const value = apiFieldValue(operation, field);
+                    if (field.kind === 'operation' && field.key === 'httpMethod') return <MethodBadge key={`${field.kind}:${field.key}`} method={operation.httpMethod} />;
+                    if (field.kind === 'operation' && field.key === 'pathTemplate') return (
+                      <span className="operation-path" key={`${field.kind}:${field.key}`}>
+                        <code>{value}</code>
+                        <span className="operation-path-badges">
+                          <OperationStatusBadges operation={operation} />
+                          {aiSet.has(operation.operationId) && <span className="ai-badge">AI suggested</span>}
+                        </span>
+                      </span>
+                    );
+                    if (field.kind === 'operation' && field.key === 'summary') return (
+                      <span className="operation-summary" key={`${field.kind}:${field.key}`}>
+                        <strong>{value}</strong>
+                        <small>{operation.description || 'No API description available.'}</small>
+                        {operation.documentationSource && <em>{operation.documentationSource === 'spec' ? 'Source documentation' : operation.documentationSource === 'template' ? 'Factual fallback' : 'AI-generated'}</em>}
+                      </span>
+                    );
+                    return (
+                      <span className={`operation-custom-field operation-field-${field.key}`} key={`${field.kind}:${field.key}`} title={`${field.label}: ${value}`}>
+                        {value}
+                      </span>
+                    );
+                  })}
                 </button>
               ))}
               </div>

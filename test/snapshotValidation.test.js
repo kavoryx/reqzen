@@ -52,6 +52,26 @@ test('import mode initially shows every custom field without changing persisted 
   assert.ok(parseSnapshot(text, { showAllFields: true }).snapshot.customFieldDefinitions.every((field) => field.visible === true));
 });
 
+test('snapshot import preserves unknown operation properties and explorer field configuration', () => {
+  const imported = {
+    ...snapshot,
+    apiFieldDefinitions: [
+      { kind: 'operation', key: 'httpMethod', label: 'HTTP verb', visible: false },
+      { kind: 'operation', key: 'sourceMetadata', label: 'Source', visible: true },
+    ],
+    operations: [{
+      ...operation,
+      sourceMetadata: { team: 'Platform', repository: 'services/users' },
+      'x-release-notes': ['added filtering'],
+    }],
+  };
+  const parsed = parseSnapshot(JSON.stringify(imported), { showAllFields: true });
+  assert.equal(parsed.problem, '');
+  assert.deepEqual(parsed.snapshot.apiFieldDefinitions, imported.apiFieldDefinitions);
+  assert.deepEqual(parsed.snapshot.operations[0].sourceMetadata, imported.operations[0].sourceMetadata);
+  assert.deepEqual(parsed.snapshot.operations[0]['x-release-notes'], imported.operations[0]['x-release-notes']);
+});
+
 test('normalizes catalog deprecation and hidden indicators into status fields', () => {
   const parsed = parseSnapshot(JSON.stringify({
     ...snapshot,
