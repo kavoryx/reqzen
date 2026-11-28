@@ -119,8 +119,8 @@
       .product-stage::before { content: ""; position: absolute; inset: -9% -7%; border-radius: 36%; background: radial-gradient(ellipse, rgba(102, 76, 225, .23), rgba(102, 76, 225, 0) 68%); filter: blur(10px); }
       .product-window { position: relative; overflow: hidden; border: 1px solid rgba(255,255,255,.44); border-radius: 18px; background: #171b22; box-shadow: 0 32px 80px rgba(28, 24, 66, .29), 0 9px 28px rgba(28, 24, 66, .16); transform: rotateY(-3deg) rotateX(1.5deg); animation: stage-arrive .8s cubic-bezier(.2,.75,.2,1) both; }
       .tour-viewport { position: relative; aspect-ratio: 16 / 9; overflow: hidden; background: #11151c; }
-      .tour-slide { position: absolute; inset: 0; margin: 0; opacity: 0; transform: translate3d(-82px, -68px, 0) rotate(-4deg) scale(.955); transform-origin: 35% 30%; transition: opacity .8s ease, transform 1.35s cubic-bezier(.16,.78,.18,1); will-change: opacity, transform; }
-      .tour-slide.enter-right { transform: translate3d(82px, -68px, 0) rotate(4deg) scale(.955); transform-origin: 65% 30%; }
+      .tour-slide { position: absolute; inset: 0; margin: 0; opacity: 0; transform: translate3d(-96px, -72px, 0) rotate(-4deg) scale(.955); transform-origin: 35% 30%; transition: opacity 1.05s ease, transform 1.8s cubic-bezier(.22,.68,.12,1); will-change: opacity, transform; }
+      .tour-slide.enter-right { transform: translate3d(96px, -72px, 0) rotate(4deg) scale(.955); transform-origin: 65% 30%; }
       .tour-slide.is-active { opacity: 1; transform: translate3d(0, 0, 0) rotate(-2.75deg) scale(1.025); }
       .tour-slide.enter-right.is-active { transform: translate3d(0, 0, 0) rotate(2.75deg) scale(1.025); }
       .tour-slide.is-leaving { opacity: 0; transform: translate3d(46px, 30px, 0) rotate(1.2deg) scale(.985); transition-duration: .65s, .85s; transition-timing-function: ease, cubic-bezier(.55,.05,.55,.95); }
