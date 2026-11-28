@@ -1,6 +1,6 @@
 {
   "name": "reqzen-desktop",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "private": true,
   "homepage": "https://kavoryx.github.io/reqzen/",
   "repository": {
@@ -25,9 +25,11 @@
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "start": "npm run build && electron .",
-    "dist:mac": "npm run build && electron-builder --mac --publish never",
-    "dist:mac-signed": "npm run build && electron-builder --mac --config.mac.notarize=true",
-    "dist:win": "npm run build && electron-builder --win --publish never",
+    "dist:mac": "npm run build && electron-builder --config electron-builder.config.cjs --mac --publish never",
+    "dist:mac-signed": "npm run build && electron-builder --config electron-builder.config.cjs --mac --config.mac.notarize=true",
+    "dist:win": "npm run build && electron-builder --config electron-builder.config.cjs --win --publish never",
+    "release:sync": "node scripts/release-config.cjs sync",
+    "release:verify": "node scripts/release-config.cjs verify",
     "test": "node --test test/*.test.js"
   },
   "devDependencies": {
@@ -44,43 +46,5 @@
   "overrides": {
     "minimatch": "^11.0.1"
   },
-  "productName": "Reqzen",
-  "build": {
-    "appId": "com.apiexplorer.desktop",
-    "productName": "Reqzen",
-    "forceCodeSigning": false,
-    "files": [
-      "main.js",
-      "preload.js",
-      "lib/**/*",
-      "app/**/*",
-      "build/icon.png",
-      "package.json"
-    ],
-    "directories": {
-      "output": "release"
-    },
-    "win": {
-      "target": [
-        "nsis"
-      ],
-      "signAndEditExecutable": true
-    },
-    "mac": {
-      "category": "public.app-category.developer-tools",
-      "target": [
-        "dmg"
-      ],
-      "hardenedRuntime": true,
-      "icon": "build/icon.png",
-      "gatekeeperAssess": false,
-      "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist",
-      "notarize": false
-    },
-    "dmg": {
-      "title": "Reqzen ${version}"
-    },
-    "artifactName": "${productName}-${version}-${arch}.${ext}"
-  }
+  "productName": "Reqzen"
 }

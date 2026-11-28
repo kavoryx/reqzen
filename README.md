@@ -142,6 +142,8 @@ npm run dist:win
 
 The installer is written to `release\` as `Reqzen-<version>-x64.exe`. The installer is unsigned, and executable signing/resource editing is disabled during packaging. Build Windows packages on Windows rather than relying on cross-platform packaging.
 
+Installer packaging, the next release version, and the published filename for each platform are maintained in `release.config.json`. After changing its version, run `npm run release:sync` to update `package.json` and `package-lock.json`, then run `npm run release:verify` before opening a release pull request. Both the local installer scripts and the release workflow use `electron-builder.config.cjs` to read this configuration.
+
 ### Build macOS disk images
 
 Build on a Mac, from Terminal in the repository root:

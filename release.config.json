@@ -1,0 +1,58 @@
+{
+  "version": "0.2.7",
+  "productName": "Reqzen",
+  "installer": {
+    "appId": "com.apiexplorer.desktop",
+    "forceCodeSigning": false,
+    "files": [
+      "main.js",
+      "preload.js",
+      "lib/**/*",
+      "app/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "signAndEditExecutable": true
+    },
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg"
+      ],
+      "hardenedRuntime": true,
+      "icon": "build/icon.png",
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "notarize": false
+    },
+    "dmg": {
+      "title": "Reqzen ${version}"
+    },
+    "artifactName": "${productName}-${version}-${arch}.${ext}"
+  },
+  "artifacts": [
+    {
+      "directory": "windows",
+      "source": "${productName}-${version}-x64.exe",
+      "published": "${productName}-Windows-${version}-x64.exe"
+    },
+    {
+      "directory": "macos-arm64",
+      "source": "${productName}-${version}-arm64.dmg",
+      "published": "${productName}-macOS-Apple-Silicon-${version}-arm64.dmg"
+    },
+    {
+      "directory": "macos-x64",
+      "source": "${productName}-${version}-x64.dmg",
+      "published": "${productName}-macOS-Intel-${version}-x64.dmg"
+    }
+  ]
+}
