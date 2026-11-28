@@ -116,6 +116,29 @@ app.post('/items', createItem);
   assert.match(undocumentedExpressResult.operations[0].description, /Identified from Express source for POST \/items/);
 });
 
+test('Python and JavaScript routes retain deprecation and hidden annotations', () => {
+  const python = scanSource(`from fastapi import FastAPI
+app = FastAPI()
+@deprecated
+@app.get("/old", include_in_schema=False)
+def old(): pass
+@app.get("/also-old", deprecated=True)
+def also_old(): pass
+`, { file: 'routes.py', serviceName: 'sample', serviceId: 's' });
+  assert.deepEqual(python.operations.map((operation) => [operation.visibility, operation.lifecycleStatus]), [
+    ['HIDDEN', 'DEPRECATED'],
+    ['PUBLIC', 'DEPRECATED'],
+  ]);
+
+  const javascript = scanSource(`const express = require('express');
+const app = express();
+/** @deprecated @hidden */
+app.get('/old', oldHandler);
+`, { file: 'server.js', serviceName: 'sample', serviceId: 's' });
+  assert.equal(javascript.operations[0].visibility, 'HIDDEN');
+  assert.equal(javascript.operations[0].lifecycleStatus, 'DEPRECATED');
+});
+
 test('default project scans include common language files but custom rules stay scoped', () => {
   const scanRules = require('../lib/scanRules');
   const exts = sourceExtensions(scanRules.activeRules(scanRules.SPRING));

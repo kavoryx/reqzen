@@ -437,7 +437,7 @@ ipcMain.handle('snapshot:open', async (event, options) => {
     throw new Error('The snapshot is larger than 50 MB.');
   }
   const text = fs.readFileSync(file, 'utf8');
-  const parsedFile = parseSnapshot(text);
+  const parsedFile = parseSnapshot(text, { showAllFields: true });
   const problem = parsedFile.problem;
   if (problem) throw new Error(problem);
   openSnapshot = parsedFile.snapshot;

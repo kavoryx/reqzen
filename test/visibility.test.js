@@ -52,6 +52,18 @@ public class D {
   assert.deepEqual(vis(ops), ['PUT /d/only HIDDEN', 'DELETE /d/other PUBLIC']);
 });
 
+test('visibility and deprecation annotation names are case-insensitive', () => {
+  const ops = scan(`@RestController
+@RequestMapping("/lower")
+public class Lower {
+  @deprecated
+  @internal
+  @GetMapping("/old") public String old() { return ""; }
+}`);
+  assert.equal(ops[0].visibility, 'INTERNAL');
+  assert.equal(ops[0].lifecycleStatus, 'DEPRECATED');
+});
+
 test('when both the class and a method are marked, the more restrictive one wins', () => {
   const ops = scan(`@RestController
 @InternalApi
