@@ -43,4 +43,4 @@ The app does not include advertising or analytics telemetry. This policy does no
 
 You choose whether to scan GitHub, clone repositories, send API requests, or use AI features. Use Ollama or a local OpenAI-compatible server to keep model prompts on this computer, or disable model-assisted features. You can remove saved application data by deleting the local data folder as described above. Data already sent to GitHub, an AI provider, an API provider, or Anthropic is subject to that provider's policies and cannot be recalled by Reqzen.
 
-For privacy questions or to report an issue, use the [project's GitHub Issues page](https://github.com/manasranjanmhnt/reqzen/issues). Do not include credentials, access tokens, or private API data in a public issue.
+For privacy questions or to report an issue, use the [project's GitHub Issues page](https://github.com/kavoryx/reqzen/issues). Do not include credentials, access tokens, or private API data in a public issue.

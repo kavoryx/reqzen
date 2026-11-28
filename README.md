@@ -14,7 +14,7 @@ You need only the installer for your operating system. The app and its runtime a
 
 Use the [Reqzen download page](https://kavoryx.github.io/reqzen/) to choose Windows or macOS and get the matching latest installer from the official GitHub Releases page. Mac users can select Apple silicon (ARM64) or Intel (x64).
 
-You can also use the [GitHub Releases](https://github.com/manasranjanmhnt/reqzen/releases) page. New releases label the operating system and processor in each filename. Older releases use these suffixes: **Windows x64** ends in `-x64.exe`, **macOS Apple silicon (ARM64)** ends in `-arm64.dmg`, and **macOS Intel (x64)** ends in `-x64.dmg`. Install and launch the app using the instructions for your operating system below.
+You can also use the [GitHub Releases](https://github.com/kavoryx/reqzen/releases) page. New releases label the operating system and processor in each filename. Older releases use these suffixes: **Windows x64** ends in `-x64.exe`, **macOS Apple silicon (ARM64)** ends in `-arm64.dmg`, and **macOS Intel (x64)** ends in `-x64.dmg`. Install and launch the app using the instructions for your operating system below.
 
 Download installers only from the official Releases page. If it does not list an installer for your operating system, wait for an official package rather than using an unofficial mirror.
 
@@ -117,7 +117,7 @@ The editable React and TypeScript renderer lives in `ui/` and is bundled into `a
 Open PowerShell on Windows or Terminal on macOS:
 
 ```sh
-git clone https://github.com/manasranjanmhnt/reqzen.git
+git clone https://github.com/kavoryx/reqzen.git
 cd reqzen
 npm ci
 npm test

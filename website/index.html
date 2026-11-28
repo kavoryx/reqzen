@@ -3,18 +3,22 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#f6f4ff">
-    <meta name="description" content="Download Reqzen, a local-first AI API explorer and REST API client for Windows and macOS. Scan APIs, plan and test requests, and export Postman collections.">
-    <meta name="keywords" content="AI API explorer, REST API client, API testing tool, API source code scanner, OpenAPI 3, local-first developer tool">
-    <link rel="canonical" href="https://manasranjanmhnt.github.io/reqzen/">
+    <meta name="theme-color" content="#0c1017">
+    <meta name="description" content="See Reqzen in action: a local-first AI API explorer and REST client for Windows and macOS. Scan source code or OpenAPI 3, search endpoints, and build requests with confidence.">
+    <meta name="keywords" content="AI API explorer, REST API client, API testing tool, API source code scanner, OpenAPI 3, local-first developer tool, Spring Boot API explorer, FastAPI client, NestJS API explorer">
+    <meta name="robots" content="index, follow, max-image-preview:large">
+    <link rel="canonical" href="https://kavoryx.github.io/reqzen/">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="Reqzen">
     <meta property="og:title" content="Reqzen | AI API Explorer">
     <meta property="og:description" content="Explore APIs in source code or OpenAPI 3, prepare requests, and test them from a local-first desktop workspace.">
-    <meta property="og:url" content="https://manasranjanmhnt.github.io/reqzen/">
-    <meta name="twitter:card" content="summary">
+    <meta property="og:url" content="https://kavoryx.github.io/reqzen/">
+    <meta property="og:image" content="https://kavoryx.github.io/reqzen/screenshots/welcome.png">
+    <meta property="og:image:alt" content="Reqzen desktop API workspace on the welcome screen">
+    <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Reqzen | AI API Explorer">
     <meta name="twitter:description" content="Explore APIs in source code or OpenAPI 3, prepare requests, and test them from a local-first desktop workspace.">
+    <meta name="twitter:image" content="https://kavoryx.github.io/reqzen/screenshots/welcome.png">
     <link rel="icon" type="image/svg+xml" href="./reqzen-mark.svg">
     <title>Reqzen | AI API Explorer</title>
     <script type="application/ld+json">
@@ -25,19 +29,24 @@
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "Windows 10/11, macOS",
         "description": "A local-first, AI-assisted API explorer and REST API client. Scan supported source code or OpenAPI 3 definitions, search APIs, plan and test requests, and export Postman collections.",
-        "url": "https://manasranjanmhnt.github.io/reqzen/",
-        "sameAs": "https://github.com/manasranjanmhnt/reqzen",
-        "keywords": "AI API explorer, REST API client, API testing, OpenAPI 3"
+        "url": "https://kavoryx.github.io/reqzen/",
+        "sameAs": "https://github.com/kavoryx/reqzen",
+        "screenshot": [
+          "https://kavoryx.github.io/reqzen/screenshots/welcome.png",
+          "https://kavoryx.github.io/reqzen/screenshots/catalog.png",
+          "https://kavoryx.github.io/reqzen/screenshots/settings.png"
+        ],
+        "keywords": "AI API explorer, REST API client, API testing, OpenAPI 3, source code scanner, desktop developer tool"
       }
     </script>
     <style>
       :root {
         color-scheme: light;
-        --ink: #1c1b2b;
-        --muted: #65647a;
-        --purple: #6747e8;
-        --purple-dark: #4c32c4;
-        --line: #e7e5ef;
+        --ink: #151826;
+        --muted: #62677a;
+        --purple: #6c52f2;
+        --purple-dark: #5238d5;
+        --line: #e2e4eb;
         --surface: #fff;
         --canvas: #f7f6fb;
         --green: #238363;
@@ -52,7 +61,8 @@
         margin: 0;
         color: var(--ink);
         background:
-          radial-gradient(ellipse at 86% 4%, rgba(181, 166, 255, .24), transparent 34rem),
+          radial-gradient(ellipse at 72% 0%, rgba(144, 120, 255, .2), transparent 38rem),
+          radial-gradient(ellipse at 12% 14%, rgba(73, 151, 255, .12), transparent 28rem),
           var(--canvas);
         font-size: 15px;
         line-height: 1.55;
@@ -66,7 +76,7 @@
       }
 
       .wrap { width: min(1080px, calc(100% - 40px)); margin-inline: auto; }
-      .topbar { height: 76px; border-bottom: 1px solid rgba(230, 228, 239, .8); }
+      .topbar { height: 76px; border-bottom: 1px solid rgba(226, 228, 235, .78); background: rgba(247, 246, 251, .78); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
       .nav { height: 100%; display: flex; align-items: center; justify-content: space-between; }
       .brand { display: inline-flex; gap: 11px; align-items: center; text-decoration: none; font-size: 18px; font-weight: 760; letter-spacing: -.04em; }
       .brand-mark {
@@ -82,18 +92,47 @@
       .hero {
         position: relative;
         display: grid;
-        min-height: 344px;
-        grid-template-columns: 1.15fr .85fr;
+        min-height: 580px;
+        grid-template-columns: .78fr 1.22fr;
         align-items: center;
-        gap: 36px;
-        padding-block: 53px 45px;
+        gap: 58px;
+        padding-block: 76px 72px;
         overflow: hidden;
       }
       .eyebrow { color: var(--purple-dark); font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
-      h1 { max-width: 620px; margin: 10px 0 13px; font-size: clamp(38px, 5vw, 56px); line-height: 1.05; letter-spacing: -.065em; }
-      .hero-copy > p { max-width: 520px; margin: 0; color: var(--muted); font-size: 16px; }
+      h1 { max-width: 620px; margin: 12px 0 17px; font-size: clamp(44px, 5.3vw, 68px); line-height: 1.01; letter-spacing: -.07em; }
+      h1 span { color: var(--purple-dark); }
+      .hero-copy > p { max-width: 490px; margin: 0; color: var(--muted); font-size: 17px; line-height: 1.65; }
+      .hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 25px; }
+      .primary-link, .secondary-link { display: inline-flex; min-height: 46px; align-items: center; justify-content: center; gap: 8px; padding: 0 17px; border-radius: 12px; font-size: 13px; font-weight: 760; text-decoration: none; transition: transform .16s ease, box-shadow .16s ease, background .16s ease; }
+      .primary-link { background: #171b25; box-shadow: 0 9px 22px rgba(17, 23, 38, .17); color: #fff; }
+      .secondary-link { border: 1px solid var(--line); background: rgba(255,255,255,.72); color: #303344; }
+      .primary-link:hover, .secondary-link:hover { transform: translateY(-2px); }
+      .primary-link:hover { box-shadow: 0 12px 28px rgba(17, 23, 38, .24); }
+      .trust-line { display: flex; flex-wrap: wrap; gap: 14px; margin: 17px 0 0; color: #777b8c; font-size: 11px; font-weight: 650; }
+      .trust-line span { display: inline-flex; align-items: center; gap: 6px; }
+      .trust-line i { width: 5px; height: 5px; border-radius: 50%; background: #42a77e; }
       .release-badge { display: inline-flex; align-items: center; gap: 9px; margin-top: 21px; padding: 8px 12px; border: 1px solid #e6e2f6; border-radius: 999px; background: rgba(255,255,255,.75); color: #4f4b65; font-size: 12px; font-weight: 680; }
       .release-dot { width: 7px; height: 7px; border-radius: 50%; background: #45ac85; box-shadow: 0 0 0 3px #e1f3eb; }
+
+      .product-stage { position: relative; min-width: 0; perspective: 1400px; }
+      .product-stage::before { content: ""; position: absolute; inset: -9% -7%; border-radius: 36%; background: radial-gradient(ellipse, rgba(102, 76, 225, .23), rgba(102, 76, 225, 0) 68%); filter: blur(10px); }
+      .product-window { position: relative; overflow: hidden; border: 1px solid rgba(255,255,255,.44); border-radius: 18px; background: #171b22; box-shadow: 0 32px 80px rgba(28, 24, 66, .29), 0 9px 28px rgba(28, 24, 66, .16); transform: rotateY(-3deg) rotateX(1.5deg); animation: stage-arrive .8s cubic-bezier(.2,.75,.2,1) both; }
+      .tour-viewport { position: relative; aspect-ratio: 16 / 9; overflow: hidden; background: #11151c; }
+      .tour-slide { position: absolute; inset: 0; margin: 0; opacity: 0; transform: translate3d(18px, 0, 0) scale(1.025); transition: opacity .55s ease, transform .75s cubic-bezier(.2,.75,.2,1); }
+      .tour-slide.is-active { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+      .tour-slide img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top left; }
+      .tour-caption { position: absolute; z-index: 2; right: 18px; bottom: 18px; left: 18px; display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 14px 15px; border: 1px solid rgba(255,255,255,.13); border-radius: 13px; background: rgba(10, 13, 19, .78); box-shadow: 0 12px 30px rgba(0,0,0,.23); color: white; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+      .tour-caption strong { display: block; font-size: 12px; letter-spacing: -.01em; }
+      .tour-caption span { display: block; max-width: 470px; margin-top: 3px; color: #c1c6d0; font-size: 10px; line-height: 1.45; }
+      .tour-step { flex: 0 0 auto; color: #8a91a3 !important; font-size: 9px !important; font-weight: 800; letter-spacing: .11em; }
+      .tour-controls { display: flex; align-items: center; gap: 7px; padding: 11px; border-top: 1px solid rgba(255,255,255,.08); background: rgba(18,22,30,.97); }
+      .tour-control { display: flex; min-width: 0; flex: 1; align-items: center; gap: 8px; padding: 9px 10px; border: 1px solid transparent; border-radius: 9px; background: transparent; color: #8d94a5; cursor: pointer; text-align: left; font-size: 10px; font-weight: 700; transition: background .16s ease, color .16s ease, border-color .16s ease; }
+      .tour-control:hover { background: rgba(255,255,255,.05); color: #e8ebf0; }
+      .tour-control[aria-pressed="true"] { border-color: rgba(145,125,255,.38); background: rgba(120,94,242,.16); color: #fff; }
+      .tour-dot { width: 6px; height: 6px; flex: 0 0 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 3px rgba(255,255,255,.06); }
+      .tour-pause { display: grid; width: 34px; height: 34px; flex: 0 0 34px; place-items: center; border: 1px solid rgba(255,255,255,.12); border-radius: 9px; background: rgba(255,255,255,.04); color: #cdd2dc; cursor: pointer; font-size: 12px; }
+      @keyframes stage-arrive { from { opacity: 0; transform: translateY(22px) rotateY(-5deg) scale(.97); } to { opacity: 1; transform: rotateY(-3deg) rotateX(1.5deg); } }
 
       .preview {
         position: relative;
@@ -247,7 +286,10 @@
       .footer-row { display: flex; justify-content: space-between; gap: 18px; }
 
       @media (max-width: 760px) {
-        .hero { min-height: 0; grid-template-columns: 1fr; gap: 30px; padding-block: 43px 32px; }
+        .hero { min-height: 0; grid-template-columns: 1fr; gap: 40px; padding-block: 48px 42px; }
+        .hero-copy > p { max-width: 620px; }
+        .product-stage { width: 100%; }
+        .product-window { transform: none; }
         .preview { justify-self: start; width: min(100%, 420px); }
         .feature-grid { grid-template-columns: 1fr; }
         .download-panel { padding: 22px; }
@@ -258,8 +300,15 @@
         .topbar { height: 64px; }
         .nav-link { font-size: 12px; }
         .hero { padding-top: 35px; }
-        h1 { font-size: 42px; }
+        h1 { font-size: 44px; }
         .hero-copy > p { font-size: 14px; }
+        .hero-actions { align-items: stretch; }
+        .primary-link, .secondary-link { flex: 1 1 auto; }
+        .tour-caption { right: 10px; bottom: 10px; left: 10px; padding: 10px 11px; }
+        .tour-caption span { display: none; }
+        .tour-controls { gap: 5px; padding: 8px; }
+        .tour-control { justify-content: center; padding: 8px 7px; font-size: 0; }
+        .tour-control .tour-dot { width: 7px; height: 7px; flex-basis: 7px; }
         .preview { min-height: 247px; padding: 13px; border-radius: 18px; }
         .preview-window { height: 219px; }
         .preview-layout { grid-template-columns: 72px 1fr; }
@@ -278,71 +327,62 @@
         .footer-row { flex-direction: column; gap: 5px; }
       }
       @media (prefers-reduced-motion: reduce) {
-        *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
+        *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition-duration: .01ms !important; }
       }
     </style>
   </head>
   <body>
     <header class="topbar">
       <nav class="nav wrap" aria-label="Main navigation">
-        <a class="brand" href="https://github.com/manasranjanmhnt/reqzen" aria-label="Reqzen on GitHub">
+        <a class="brand" href="https://github.com/kavoryx/reqzen" aria-label="Reqzen on GitHub">
           <img class="brand-mark" src="./reqzen-mark.svg" alt="" aria-hidden="true">
           <span>Reqzen</span>
         </a>
-        <a class="nav-link" href="https://github.com/manasranjanmhnt/reqzen">Explore the project <span aria-hidden="true">↗</span></a>
+        <a class="nav-link" href="https://github.com/kavoryx/reqzen">Explore the project <span aria-hidden="true">↗</span></a>
       </nav>
     </header>
 
     <main class="wrap">
       <section class="hero" aria-labelledby="page-title">
         <div class="hero-copy">
-          <span class="eyebrow">Desktop API explorer</span>
-          <h1 id="page-title">Explore APIs.<br>Build better requests.</h1>
-          <p>Reqzen is a local-first AI API explorer and REST API client for Windows and macOS. Find APIs in source code or OpenAPI 3, then prepare and test requests from your desktop.</p>
+          <span class="eyebrow">Local-first desktop API workspace</span>
+          <h1 id="page-title">Point at code.<br><span>Get a working API client.</span></h1>
+          <p>Scan real endpoints from source code or OpenAPI 3, search in plain language, and prepare trustworthy requests—without moving your workspace to a cloud service.</p>
+          <div class="hero-actions">
+            <a class="primary-link" href="#download">Download Reqzen <span aria-hidden="true">↓</span></a>
+            <a class="secondary-link" href="https://github.com/kavoryx/reqzen" target="_blank" rel="noreferrer">View on GitHub <span aria-hidden="true">↗</span></a>
+          </div>
+          <div class="trust-line" aria-label="Product highlights">
+            <span><i aria-hidden="true"></i>Windows and macOS</span>
+            <span><i aria-hidden="true"></i>AI optional</span>
+            <span><i aria-hidden="true"></i>Local-first by design</span>
+          </div>
           <div class="release-badge">
             <span class="release-dot" aria-hidden="true"></span>
             <span id="release-label" aria-live="polite">Checking the latest release…</span>
           </div>
         </div>
-        <div class="preview" aria-hidden="true">
-          <div class="preview-float">
-            <img class="preview-float-mark" src="./reqzen-mark.svg" alt="">
-            <span><strong>Your API workspace</strong><small>Private by design</small></span>
-          </div>
-          <div class="preview-window">
-            <div class="preview-bar">
-              <span class="preview-brand"><img class="preview-logo" src="./reqzen-mark.svg" alt="">Reqzen</span>
-              <span class="preview-project"><i></i> local project</span>
+        <div class="product-stage">
+          <div class="product-window" id="product-tour" aria-label="Reqzen product screenshots">
+            <div class="tour-viewport">
+              <figure class="tour-slide is-active" data-tour-slide="0">
+                <img src="./screenshots/welcome.png" alt="Reqzen welcome workspace with options to scan a project, connect a repository, open a snapshot, or start a request" width="1458" height="768">
+                <figcaption class="tour-caption"><span><strong>Start from your own code</strong>Scan a local project or GitHub repository, open a snapshot, or begin with a quick request.</span><span class="tour-step">01 · DISCOVER</span></figcaption>
+              </figure>
+              <figure class="tour-slide" data-tour-slide="1" aria-hidden="true">
+                <img src="./screenshots/catalog.png" alt="Reqzen API catalog showing service navigation, natural-language search, HTTP methods, routes, and generated summaries" width="1464" height="768">
+                <figcaption class="tour-caption"><span><strong>Search the catalog, not a black box</strong>Explore the selected services and prepare a grounded request from method, path, parameters, and context.</span><span class="tour-step">02 · EXPLORE</span></figcaption>
+              </figure>
+              <figure class="tour-slide" data-tour-slide="2" aria-hidden="true">
+                <img src="./screenshots/settings.png" alt="Reqzen settings showing appearance, theme, accent color, and accessibility controls" width="1456" height="768">
+                <figcaption class="tour-caption"><span><strong>Make the workspace yours</strong>Control appearance, text scale, shortcuts, AI behavior, API-search guidance, and privacy from one place.</span><span class="tour-step">03 · CONFIGURE</span></figcaption>
+              </figure>
             </div>
-            <div class="preview-layout">
-              <div class="preview-side">
-                <span class="preview-side-label">WORKSPACE</span>
-                <div class="preview-nav active"><i></i>Catalog</div>
-                <div class="preview-nav"><i></i>Requests</div>
-                <div class="preview-nav"><i></i>Environments</div>
-              </div>
-              <div class="preview-main">
-                <div class="preview-heading">
-                  <span><strong>API catalog</strong><small>12 endpoints · 3 services</small></span>
-                  <span class="preview-count">12</span>
-                </div>
-                <div class="preview-search"><i></i><span>Search endpoints</span><kbd>⌘ K</kbd></div>
-                <div class="preview-row">
-                  <span class="preview-method">GET</span>
-                  <span class="preview-endpoint"><strong>/api/users</strong><small>users-service</small></span>
-                  <span class="preview-status"></span>
-                </div>
-                <div class="preview-row">
-                  <span class="preview-method post">POST</span>
-                  <span class="preview-endpoint"><strong>/api/orders</strong><small>orders-service</small></span>
-                  <span class="preview-status"></span>
-                </div>
-                <div class="preview-row">
-                  <span class="preview-method">GET</span>
-                  <span class="preview-endpoint"><strong>/api/health</strong><small>gateway</small></span>
-                  <span class="preview-status"></span>
-                </div>
-              </div>
+            <div class="tour-controls" aria-label="Product tour">
+              <button class="tour-control" type="button" data-tour-control="0" aria-pressed="true"><span class="tour-dot" aria-hidden="true"></span>Discover APIs</button>
+              <button class="tour-control" type="button" data-tour-control="1" aria-pressed="false"><span class="tour-dot" aria-hidden="true"></span>Explore catalog</button>
+              <button class="tour-control" type="button" data-tour-control="2" aria-pressed="false"><span class="tour-dot" aria-hidden="true"></span>Configure workspace</button>
+              <button class="tour-pause" type="button" id="tour-pause" aria-label="Pause product tour" title="Pause product tour">Ⅱ</button>
             </div>
           </div>
         </div>
@@ -367,10 +407,10 @@
             <p>Search APIs in natural language, plan request inputs, or draft API documentation with Ollama, Claude, or an OpenAI-compatible provider.</p>
           </article>
         </div>
-        <a class="features-link" href="https://github.com/manasranjanmhnt/reqzen#what-reqzen-helps-you-do">Explore Reqzen features and documentation <span aria-hidden="true">↗</span></a>
+        <a class="features-link" href="https://github.com/kavoryx/reqzen#what-reqzen-helps-you-do">Explore Reqzen features and documentation <span aria-hidden="true">↗</span></a>
       </section>
 
-      <section class="download-panel" aria-labelledby="download-title">
+      <section class="download-panel" id="download" aria-labelledby="download-title">
         <div class="panel-head">
           <div>
             <h2 id="download-title">Choose your platform</h2>
@@ -418,10 +458,10 @@
               <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v11m0 0 4-4m-4 4-4-4M5 16v3h14v-3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
               <span id="download-label">Choose an operating system</span>
             </a>
-            <a class="text-link" id="release-link" href="https://github.com/manasranjanmhnt/reqzen/releases" target="_blank" rel="noreferrer">All releases <span aria-hidden="true">↗</span></a>
+            <a class="text-link" id="release-link" href="https://github.com/kavoryx/reqzen/releases" target="_blank" rel="noreferrer">All releases <span aria-hidden="true">↗</span></a>
           </div>
         </div>
-        <p class="fine-print" id="platform-note">Installers are downloaded directly from GitHub. Windows packages are unsigned; macOS packages are unsigned and not notarized. <a href="https://github.com/manasranjanmhnt/reqzen#install-reqzen">See install notes</a>.</p>
+        <p class="fine-print" id="platform-note">Installers are downloaded directly from GitHub. Windows packages are unsigned; macOS packages are unsigned and not notarized. <a href="https://github.com/kavoryx/reqzen#install-reqzen">See install notes</a>.</p>
       </section>
 
       <section class="steps" aria-label="Installation overview">
@@ -434,14 +474,14 @@
     <footer>
       <div class="wrap footer-row">
         <span>Reqzen · An API explorer for your desktop</span>
-        <span>Only download software from sources you trust. <a class="text-link" href="https://github.com/manasranjanmhnt/reqzen/releases">Verify a release</a></span>
+        <span>Only download software from sources you trust. <a class="text-link" href="https://github.com/kavoryx/reqzen/releases">Verify a release</a></span>
       </div>
     </footer>
 
     <script type="module">
       import { indexAssets } from './downloads.mjs';
 
-      const owner = 'manasranjanmhnt';
+      const owner = 'kavoryx';
       const repository = 'reqzen';
       const releasePage = `https://github.com/${owner}/${repository}/releases`;
       const releaseLabel = document.getElementById('release-label');
@@ -456,6 +496,70 @@
       let release = null;
       let installerAssets = {};
       let releaseError = false;
+      const tour = document.getElementById('product-tour');
+      const tourSlides = [...document.querySelectorAll('[data-tour-slide]')];
+      const tourControls = [...document.querySelectorAll('[data-tour-control]')];
+      const tourPause = document.getElementById('tour-pause');
+      const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+      let tourIndex = 0;
+      let tourPaused = reduceMotion.matches;
+      let tourTimer = null;
+
+      function showTourSlide(index) {
+        tourIndex = index;
+        tourSlides.forEach((slide, slideIndex) => {
+          const active = slideIndex === index;
+          slide.classList.toggle('is-active', active);
+          slide.setAttribute('aria-hidden', String(!active));
+        });
+        tourControls.forEach((control, controlIndex) => {
+          control.setAttribute('aria-pressed', String(controlIndex === index));
+        });
+      }
+
+      function renderTourState() {
+        tourPause.textContent = tourPaused ? '▶' : 'Ⅱ';
+        tourPause.setAttribute('aria-label', tourPaused ? 'Play product tour' : 'Pause product tour');
+        tourPause.title = tourPaused ? 'Play product tour' : 'Pause product tour';
+      }
+
+      function scheduleTour() {
+        clearInterval(tourTimer);
+        tourTimer = tourPaused ? null : setInterval(() => {
+          showTourSlide((tourIndex + 1) % tourSlides.length);
+        }, 5200);
+      }
+
+      tourControls.forEach((control) => {
+        control.addEventListener('click', () => {
+          showTourSlide(Number(control.dataset.tourControl));
+          tourPaused = true;
+          renderTourState();
+          scheduleTour();
+        });
+      });
+      tourPause.addEventListener('click', () => {
+        tourPaused = !tourPaused;
+        renderTourState();
+        scheduleTour();
+      });
+      tour.addEventListener('mouseenter', () => {
+        clearInterval(tourTimer);
+      });
+      tour.addEventListener('mouseleave', scheduleTour);
+      tour.addEventListener('focusin', () => clearInterval(tourTimer));
+      tour.addEventListener('focusout', scheduleTour);
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) clearInterval(tourTimer);
+        else scheduleTour();
+      });
+      reduceMotion.addEventListener?.('change', (event) => {
+        tourPaused = event.matches;
+        renderTourState();
+        scheduleTour();
+      });
+      renderTourState();
+      scheduleTour();
 
       function detectPlatform() {
         const platform = navigator.userAgentData?.platform || navigator.platform || '';

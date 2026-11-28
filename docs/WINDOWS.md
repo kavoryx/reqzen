@@ -21,7 +21,7 @@ The Git check is optional. If Node.js was installed while PowerShell was open, c
 Clone the public repository and enter its folder:
 
 ```powershell
-git clone https://github.com/manasranjanmhnt/reqzen.git
+git clone https://github.com/kavoryx/reqzen.git
 Set-Location .\reqzen
 ```
 
